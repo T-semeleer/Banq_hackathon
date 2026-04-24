@@ -32,7 +32,7 @@ SplitBill is a standalone web application that automates receipt splitting using
 | Frontend | Next.js (React) — deployed on Vercel or AWS Amplify |
 | Backend API | Next.js API routes or AWS Lambda (Python) |
 | OCR | AWS Textract (managed, no setup needed) |
-| Audio transcription | OpenAI Whisper API (recommended — fast, cheap, no infra) |
+| Audio transcription | OpenAI Whisper API — Python/Flask service (`audio/`) on port 5050 |
 | LLM | Claude Opus via Anthropic API |
 | Payments | Bunq API (bunq.me tabs \+ request-inquiry) |
 | Database | DynamoDB (AWS) or simple JSON in S3 |
@@ -101,7 +101,27 @@ Use AWS Textract's `AnalyzeExpense` API, which is specifically designed for rece
 
 ### Audio pipeline
 
-Recommended approach: Use the OpenAI Whisper API (`api.openai.com/v1/audio/transcriptions`). It accepts audio files up to 25MB and returns text in seconds. Cost is $0.006/minute, negligible for a hackathon. After transcription, send the text to Claude with a prompt like: "Evaluate this transcription for usability. Does it clearly describe who ordered which items? Rate: GOOD (clear assignments), PARTIAL (some assignments clear), or POOR (unusable). If POOR, suggest what the user should re-record." This quality check prevents bad data from entering the matching pipeline.
+**Implemented.** Python/Flask service in `audio/` running on port 5050.
+
+**Test page:** `http://localhost:5050/audio-test` — record audio in-browser, send to Whisper, edit the transcript manually.
+
+**Routes:**
+- `GET /audio-test` — recording UI (MediaRecorder API, start/stop, audio preview)
+- `POST /api/transcribe` — receives multipart audio blob, calls `whisper-1`, returns `{ transcript: "..." }`
+
+**Key implementation details:**
+- Browser records as `audio/webm;codecs=opus`; backend strips the codec suffix before sending to Whisper (OpenAI rejects codec-qualified MIME types)
+- File passed to Whisper as a named tuple `("recording.webm", file, "audio/webm")` so the SDK sets the correct Content-Type
+- Empty recordings are rejected with a 400 before hitting the API
+- Max upload size: 25 MB (Whisper limit)
+- Config: `audio/.env` with `OPENAI_API_KEY` (see `audio/.env.example`)
+
+**Run locally:**
+```bash
+cd audio && python3 app.py
+```
+
+**Next step (not yet built):** After transcription, send the text to Claude for a quality check — rate as GOOD / PARTIAL / POOR and prompt the user to re-record if POOR.
 
 ### LLM matching prompt
 
@@ -193,7 +213,7 @@ Each bill split is stored as a single JSON document in DynamoDB (or S3 for simpl
 
 | \# | Task | Priority | Hours | Dependencies |
 | :---- | :---- | :---- | :---- | :---- |
-| 1 | Audio recording \+ Whisper API integration | **P0** | 2-3h | None — START FIRST |
+| 1 | Audio recording \+ Whisper API integration | **P0 ✅ DONE** | 2-3h | — |
 | 2 | Audio quality check with Claude | P1 | 1h | Task 1 |
 | 3 | Backend API routes (upload, process, status) | **P0** | 2-3h | None |
 | 4 | Shared website page (split view, receipt, status) | P1 | 2-3h | Backend APIs |
@@ -264,63 +284,37 @@ Each bill split is stored as a single JSON document in DynamoDB (or S3 for simpl
 
 ## 9\. GitHub repository structure
 
-splitbill/
-
-├── app/                        \# Next.js app directory
-
-│   ├── page.tsx                \# Landing/capture page
-
-│   ├── s/\[id\]/page.tsx         \# Shared split view
-
-│   └── api/                    \# API routes
-
-│       ├── upload/             \# Receipt \+ audio upload
-
-│       ├── process/            \# Trigger AI pipeline
-
-│       ├── split/\[id\]/         \# Get/update split data
-
-│       └── payment/            \# Bunq payment endpoints
-
-├── lib/                        \# Shared utilities
-
-│   ├── bunq.ts                 \# Bunq API wrapper
-
-│   ├── ocr.ts                  \# Textract integration
-
-│   ├── audio.ts                \# Whisper integration
-
-│   ├── llm.ts                  \# Claude Opus prompts
-
-│   └── db.ts                   \# DynamoDB/S3 data layer
-
-├── components/                 \# React components
-
-├── public/                     \# Static assets
-
-├── .env.local                  \# API keys (NEVER commit)
-
+```
+Banq_hackathon/
+├── audio/                      # Audio transcription service (BUILT)
+│   ├── app.py                  # Flask app — /audio-test + /api/transcribe
+│   ├── templates/
+│   │   └── audio_test.html     # Recording UI
+│   ├── requirements.txt        # flask, openai, python-dotenv
+│   ├── .env                    # OPENAI_API_KEY (never commit)
+│   └── .env.example            # Template
+│
+├── ocrstuf/                    # OCR pipeline (Streamlit — separate service)
+│   ├── app.py
+│   ├── core/
+│   └── engines/
+│
+├── hackathon_toolkit-main/     # Bunq API Python toolkit
+│
 ├── .gitignore
+└── SplitBill-Project-Document.md
+```
 
-└── README.md
+**Planned (not yet built):** Next.js frontend (`app/`), shared split view, Bunq payment layer.
 
-### Environment variables needed (.env.local)
+### Environment variables
 
-BUNQ\_API\_KEY=your\_sandbox\_key
+| Service | File | Variables |
+| :---- | :---- | :---- |
+| Audio (Flask) | `audio/.env` | `OPENAI_API_KEY` |
+| Future frontend | `.env.local` | `BUNQ_API_KEY`, `BUNQ_RSA_PRIVATE_KEY`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `ANTHROPIC_API_KEY`, `S3_BUCKET` |
 
-BUNQ\_RSA\_PRIVATE\_KEY=your\_private\_key
-
-AWS\_ACCESS\_KEY\_ID=your\_aws\_key
-
-AWS\_SECRET\_ACCESS\_KEY=your\_aws\_secret
-
-AWS\_REGION=eu-west-1
-
-OPENAI\_API\_KEY=your\_openai\_key
-
-ANTHROPIC\_API\_KEY=your\_anthropic\_key
-
-S3\_BUCKET=splitbill-receipts
+Never commit `.env` or `.env.local` — both are in `.gitignore`.
 
 ---
 
