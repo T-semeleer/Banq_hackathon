@@ -174,6 +174,7 @@ For a typical 30-second voice memo: **< $0.01 total**
 |---|---|
 | Whisper transcription | Done |
 | Claude Haiku validation | Done |
+| LLM matching (OCR + audio → JSON) | Done |
 | Backend API route integration | Pending (Adam) |
 | Browser audio recording UI | Pending (Noah / Adam) |
-| LLM matching integration | Pending (Terrence) |
+| Bunq payment link injection | Pending (Terrence) |
