@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "splitbill",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "export AWS_DEFAULT_REGION=us-east-1 AWS_ACCESS_KEY_ID=ASIASVLMDVHAGYGC3E3U AWS_SECRET_ACCESS_KEY=F3UqfrsngmZG2ijUiVTIxzQkJ8X9JgnSvd6qaKzF 'AWS_SESSION_TOKEN=IQoJb3JpZ2luX2VjEL///////////wEaCXVzLWVhc3QtMSJHMEUCIQCAK/7U/UyYTXNuwNAO6E8svYUTr0FbeDiUx2XHQI3ukgIgT++2wb5+nMz7LsTrFTzInid6Oh1CsaDpQWCtEAwdRTMqogIIiP//////////ARABGgwxODMyOTk3MTM0NzIiDGf8g/ikWoOYYzfTvyr2AeWAnVHyBeFw8MjYIIv85PLXS4ZPFoMHA90U9hGwrOq7Uuz5Jxlfu9igZHWEgJm25pQpnzvC4ek/dfnW973v4r50LCU0o/GAEiDUx45hsbVTZtVcp9SmC8Xs25x1HIc9eOfuq+6PAaaJxE6xbbHA+ngm6wOJXp9U8Jp6Y24oJdeGQeEcR1wEEo4llhSZV+wgY9kctdPl2vAcspmfZ5TA3r9bFzlHeTDGVqGTgXtH/xq19w7sQZRMj3q8hc01fTM4t7jWWAEK9FESCWY9fA7u0T/mR6Vr0+Ta9urI/LlRvnCGg15caOOQ3c035cgM1a54JqrQOMiSQzDu4q/PBjqdAfoNnDULMg5FfHxHmK4GfT0+C+TmD8GMGWZRJ++SlzrFA4E9esWSnySaAGeI/2XY2yVEgshtipVbxhxJkqTTtXsPA0GZRCCRiSIXZYAlrsma7Vroitlfe+jhWLgWYf+MEUONN2nfU6w70sefZbWS4szX27uRZ1O/ev1m9DaVdxqBMnYSDFRZ0pH9fLUWwQNIPfz+rWx1UihTABSYkZU=' S3_BUCKET=splitbill-receipts-183299713472 && .venv/bin/python src/app.py"],
+      "port": 5000
+    }
+  ]
+}

@@ -21,7 +21,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 _ROOT = Path(__file__).resolve().parent.parent
 _TOOLKIT_DIR = _ROOT / "hackathon_toolkit-main"
@@ -574,4 +574,5 @@ def insight_preference():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", debug=True, port=port)

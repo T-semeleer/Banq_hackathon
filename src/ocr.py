@@ -113,12 +113,19 @@ def parse_response(response: dict, image_url: str) -> ReceiptResult:
             pool = clean if clean else [v.split("\n")[0] for v in vendor_candidates]
             vendor = min(pool, key=len)
 
-        # Resolve total: AMOUNT_PAID is the most reliable field on grocery/restaurant
-        # receipts; only use TOTAL candidates when no AMOUNT_PAID is present.
-        if amount_paid is not None:
+        # Resolve total: prefer the largest TOTAL candidate.
+        # Only trust AMOUNT_PAID over TOTAL when it is >3x larger — which means
+        # Textract clearly misread a subtotal as TOTAL (e.g. Food Lion tax line).
+        # When AMOUNT_PAID is only slightly above TOTAL it is the cash tendered,
+        # not the bill total (e.g. TOTAL=27.35, CASH=30.00, CHANGE=2.65).
+        if total_candidates:
+            best_total = max(total_candidates)
+            if amount_paid is not None and amount_paid > best_total * 3:
+                total = amount_paid
+            else:
+                total = best_total
+        elif amount_paid is not None:
             total = amount_paid
-        elif total_candidates:
-            total = max(total_candidates)
         elif amount_due is not None:
             total = amount_due
 

@@ -195,6 +195,29 @@
                border-radius: 50%; animation: spin .6s linear infinite;
                vertical-align: middle; margin-right: .4rem; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Camera modal */
+    .cam-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.85); z-index: 999;
+      flex-direction: column; align-items: center; justify-content: center; gap: 1rem;
+    }
+    .cam-overlay.open { display: flex; }
+    .cam-overlay video {
+      max-width: min(96vw, 640px); max-height: 65vh;
+      border-radius: 10px; background: #000;
+    }
+    .cam-overlay canvas { display: none; }
+    .cam-preview-img {
+      display: none; max-width: min(96vw, 640px); max-height: 65vh;
+      border-radius: 10px; border: 2px solid #00c389;
+    }
+    .cam-overlay .cam-btn-row { display: flex; gap: .75rem; }
+    .btn-capture { background: #fff; color: #111; font-size: 1.1rem;
+                   padding: .65rem 1.4rem; border-radius: 8px; border: none;
+                   cursor: pointer; font-weight: 700; }
+    .btn-capture:hover { background: #e5e7eb; }
+    .cam-tip { color: #aaa; font-size: .78rem; }
   </style>
 </head>
 <body>
@@ -212,9 +235,17 @@
     <!-- Receipt OCR -->
     <div class="card">
       <div class="card-title"><span class="step-badge">1</span> Receipt</div>
-      <label for="imageInput">Upload receipt image (optional)</label>
-      <input type="file" id="imageInput" accept="image/*" style="margin-bottom:.75rem;font-size:.85rem;">
-      <button class="btn btn-secondary btn-sm" id="btnOcr" onclick="runOcr()">Extract Text</button>
+      <!-- Hidden input used as camera fallback on HTTP/mobile (no getUserMedia) -->
+      <input type="file" id="nativeCameraInput" accept="image/*" capture="environment" style="display:none" onchange="onNativeCameraCapture(this)">
+      <label for="imageInput">Upload or capture receipt</label>
+      <input type="file" id="imageInput" accept="image/*" style="margin-bottom:.75rem;font-size:.85rem;" onchange="onFileSelected()">
+      <div class="btn-row" style="margin-top:0">
+        <button class="btn btn-secondary btn-sm" id="btnCamera" onclick="openCamera()">📷 Take Photo</button>
+        <button class="btn btn-secondary btn-sm" id="btnOcr" onclick="runOcr()" disabled>Extract Text</button>
+      </div>
+      <div id="capturedPreviewWrap" style="display:none;margin-top:.75rem;">
+        <img id="capturedPreview" style="max-width:100%;border-radius:8px;border:1.5px solid #00c389;" alt="Captured receipt">
+      </div>
       <div class="error-box" id="ocrError"></div>
       <div style="margin-top:.75rem;">
         <label for="ocrText">Receipt text</label>
@@ -352,11 +383,131 @@
 
 </main>
 
+<!-- ── Camera modal ─────────────────────────────────────────────────────────── -->
+<div class="cam-overlay" id="camOverlay">
+  <video id="camVideo" autoplay playsinline webkit-playsinline muted></video>
+  <canvas id="camCanvas"></canvas>
+  <img class="cam-preview-img" id="camPreviewImg" alt="Captured photo">
+  <div class="cam-btn-row">
+    <button class="btn-capture" id="btnSnap" onclick="snapPhoto()">📸 Snap</button>
+    <button class="btn btn-primary btn-sm" id="btnUsePhoto" style="display:none" onclick="usePhoto()">Use this photo →</button>
+    <button class="btn btn-secondary btn-sm" id="btnRetake" style="display:none" onclick="retakePhoto()">↩ Retake</button>
+    <button class="btn btn-secondary btn-sm" onclick="closeCamera()">✕ Cancel</button>
+  </div>
+  <span class="cam-tip" id="camTip">Point camera at the receipt and tap Snap</span>
+</div>
+
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 let splitData = null;
 let reconcileData = null;
+<<<<<<< Updated upstream
 let linkedExpenseId = null;
+=======
+let capturedBlob = null;   // blob from camera snap or file upload
+let camStream = null;      // active MediaStream
+
+// ── Camera ────────────────────────────────────────────────────────────────────
+async function openCamera() {
+  clearError("ocrError");
+
+  // HTTPS is required for getUserMedia on mobile — fall back to native file capture
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    const input = document.getElementById("nativeCameraInput");
+    input.click();
+    return;
+  }
+
+  const overlay = document.getElementById("camOverlay");
+  const video   = document.getElementById("camVideo");
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+    });
+    video.srcObject = camStream;
+    overlay.classList.add("open");
+    await video.play();
+    // Reset to live-view state
+    video.style.display = "block";
+    document.getElementById("camPreviewImg").style.display = "none";
+    document.getElementById("btnSnap").style.display = "inline-block";
+    document.getElementById("btnUsePhoto").style.display = "none";
+    document.getElementById("btnRetake").style.display = "none";
+    document.getElementById("camTip").textContent = "Point camera at the receipt and tap Snap";
+  } catch (err) {
+    showError("ocrError", "Camera access denied: " + err.message);
+  }
+}
+
+function onNativeCameraCapture(input) {
+  const file = input.files[0];
+  if (!file) return;
+  capturedBlob = file;
+  const preview = document.getElementById("capturedPreview");
+  preview.src = URL.createObjectURL(file);
+  document.getElementById("capturedPreviewWrap").style.display = "block";
+  document.getElementById("btnOcr").disabled = false;
+  runOcr();
+}
+
+function snapPhoto() {
+  const video  = document.getElementById("camVideo");
+  const canvas = document.getElementById("camCanvas");
+  canvas.width  = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0);
+  canvas.toBlob(blob => {
+    capturedBlob = blob;
+    const url = URL.createObjectURL(blob);
+    const img = document.getElementById("camPreviewImg");
+    img.src = url;
+    img.style.display = "block";
+    video.style.display = "none";
+    document.getElementById("btnSnap").style.display = "none";
+    document.getElementById("btnUsePhoto").style.display = "inline-block";
+    document.getElementById("btnRetake").style.display = "inline-block";
+    document.getElementById("camTip").textContent = "Happy with this? Hit Use, or Retake.";
+  }, "image/jpeg", 0.92);
+}
+
+function retakePhoto() {
+  const video = document.getElementById("camVideo");
+  video.style.display = "block";
+  document.getElementById("camPreviewImg").style.display = "none";
+  document.getElementById("btnSnap").style.display = "inline-block";
+  document.getElementById("btnUsePhoto").style.display = "none";
+  document.getElementById("btnRetake").style.display = "none";
+  document.getElementById("camTip").textContent = "Point camera at the receipt and tap Snap";
+  capturedBlob = null;
+}
+
+function usePhoto() {
+  if (!capturedBlob) return;
+  closeCamera();
+  // Show thumbnail in card
+  const preview = document.getElementById("capturedPreview");
+  preview.src = URL.createObjectURL(capturedBlob);
+  document.getElementById("capturedPreviewWrap").style.display = "block";
+  // Enable Extract Text and clear any stale file input selection
+  document.getElementById("imageInput").value = "";
+  document.getElementById("btnOcr").disabled = false;
+  // Auto-run OCR
+  runOcr();
+}
+
+function closeCamera() {
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  document.getElementById("camOverlay").classList.remove("open");
+}
+
+function onFileSelected() {
+  const file = document.getElementById("imageInput").files[0];
+  if (!file) return;
+  capturedBlob = null; // clear any camera capture
+  document.getElementById("capturedPreviewWrap").style.display = "none";
+  document.getElementById("btnOcr").disabled = false;
+}
+>>>>>>> Stashed changes
 
 // ── Recording ─────────────────────────────────────────────────────────────────
 let mediaRecorder = null, chunks = [], timerInterval = null, seconds = 0, audioBlob = null;
@@ -381,6 +532,12 @@ async function startRec() {
   audioBlob = null;
   document.getElementById("audioPreview").classList.remove("visible");
   document.getElementById("btnTranscribe").disabled = true;
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showError("voiceError", "Microphone requires a secure connection (HTTPS). Please type your order description in the transcript box below instead.");
+    return;
+  }
+
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     chunks = [];
@@ -445,13 +602,14 @@ async function doTranscribe() {
 // ── OCR ───────────────────────────────────────────────────────────────────────
 async function runOcr() {
   clearError("ocrError");
-  const file = document.getElementById("imageInput").files[0];
-  if (!file) { showError("ocrError", "Select an image first."); return; }
+  // Prefer camera capture; fall back to file input
+  const imageSource = capturedBlob || document.getElementById("imageInput").files[0];
+  if (!imageSource) { showError("ocrError", "Select or capture an image first."); return; }
   const btn = document.getElementById("btnOcr");
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Extracting…';
   const fd = new FormData();
-  fd.append("image", file);
+  fd.append("image", imageSource, capturedBlob ? "capture.jpg" : imageSource.name);
   try {
     const res = await fetch("/api/ocr", { method: "POST", body: fd });
     const data = await res.json();

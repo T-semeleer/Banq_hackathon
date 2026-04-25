@@ -100,7 +100,14 @@ def match(ocr_text: str, transcript: str) -> SplitResult:
         ],
     )
 
-    raw = json.loads(response.content[0].text)
+    text = response.content[0].text.strip()
+    # Strip markdown code fences Claude sometimes wraps around JSON
+    if text.startswith("```"):
+        text = text.split("```", 2)[1]          # drop opening ```[json]
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.rsplit("```", 1)[0].strip()  # drop closing ```
+    raw = json.loads(text)
     return _parse(raw)
 
 
