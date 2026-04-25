@@ -4,127 +4,417 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SplitBill — bunq</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Maven+Pro:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0b0b0d;
+      --surface: #16161a;
+      --surface-2: #1f1f24;
+      --surface-3: #252529;
+      --border: #2a2a30;
+      --border-2: #36363d;
+      --text: #ffffff;
+      --text-dim: #8a8a93;
+      --text-muted: #5a5a64;
+      --accent: #ff2d87;
+      --accent-2: #ff7a3d;
+      --positive: #2bd9a6;
+      --pending: #ffb84d;
+      --danger: #ff4d6a;
+      --radius: 18px;
+      --radius-lg: 24px;
+    }
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #f0f4f8;
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    html, body {
+      background: var(--bg);
+      color: var(--text);
       min-height: 100vh;
-      color: #111;
+    }
+    body {
+      font-family: "Maven Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-weight: 500;
+      overflow-x: hidden;
     }
 
-    header {
-      background: #00c389;
-      color: #fff;
-      padding: 1rem 2rem;
+    /* ── Shell ─────────────────────────────────────────────────────────────── */
+    .app {
+      max-width: 720px;
+      margin: 0 auto;
+      min-height: 100vh;
       display: flex;
-      align-items: center;
-      gap: 1rem;
-      box-shadow: 0 2px 8px rgba(0,0,0,.15);
-    }
-    header h1 { font-size: 1.4rem; font-weight: 800; }
-    header span { font-size: 0.85rem; opacity: .8; }
-
-    main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; display: grid; gap: 1.5rem; }
-
-    .card {
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 1px 6px rgba(0,0,0,.08);
-      padding: 1.5rem;
+      flex-direction: column;
+      padding-bottom: 60px;
     }
 
-    .card-title {
-      font-size: 1rem;
+    /* ── Brand header ──────────────────────────────────────────────────────── */
+    .brand {
+      text-align: center;
+      padding: 26px 20px 16px;
+    }
+    .brand h1 {
+      margin: 0;
+      font-weight: 900;
+      font-size: 30px;
+      letter-spacing: -0.5px;
+      line-height: 1;
+      color: var(--text);
+    }
+    .brand h1 .dot { color: var(--accent); }
+    .brand .tagline {
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--text-dim);
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Rainbow bar ───────────────────────────────────────────────────────── */
+    .rainbow-bar {
+      height: 4px;
+      width: 100%;
+      background: linear-gradient(90deg,
+        #ff2d87 0%, #ff5a3d 17%, #ffb84d 34%,
+        #ffe14d 50%, #2bd9a6 66%, #3da9ff 83%, #a056ff 100%);
+    }
+
+    /* ── Page intro ────────────────────────────────────────────────────────── */
+    .page-intro {
+      padding: 28px 22px 8px;
+    }
+    .page-intro .eyebrow {
+      color: var(--text-dim);
+      font-size: 12px;
+      letter-spacing: 1.8px;
+      text-transform: uppercase;
       font-weight: 700;
-      color: #333;
-      margin-bottom: 1rem;
+    }
+    .page-intro h2 {
+      margin: 8px 0 6px;
+      font-size: 26px;
+      font-weight: 900;
+      letter-spacing: -0.4px;
+      line-height: 1.15;
+    }
+    .page-intro p {
+      color: var(--text-dim);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    /* ── Two-column grid ───────────────────────────────────────────────────── */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding: 0 18px;
+      margin-top: 22px;
+    }
+    @media (max-width: 580px) { .two-col { grid-template-columns: 1fr; } }
+
+    /* ── Step card ─────────────────────────────────────────────────────────── */
+    .step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      transition: border-color .2s ease;
+      margin: 16px 18px 0;
+    }
+    .step:first-child { margin-top: 0; }
+    .step.active { border-color: var(--border-2); }
+    .step.done   { border-color: rgba(43,217,166,.35); }
+    .two-col .step { margin: 0; }
+
+    .step-head {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 12px;
+      padding: 16px 18px 14px;
     }
-    .step-badge {
-      background: #00c389;
-      color: #fff;
+    .step-num {
+      width: 26px; height: 26px;
       border-radius: 50%;
-      width: 22px; height: 22px;
-      font-size: 0.75rem;
+      display: grid; place-items: center;
+      background: var(--surface-2);
+      color: var(--text-dim);
+      font-size: 12px;
+      font-weight: 800;
+      border: 1px solid var(--border);
+      flex: 0 0 auto;
+      transition: background .25s, color .25s, border-color .25s;
+    }
+    .step.done .step-num {
+      background: var(--positive);
+      color: #06231b;
+      border-color: var(--positive);
+    }
+    .step-title {
       font-weight: 700;
+      font-size: 15px;
+      flex: 1;
+    }
+    .step-subtitle {
+      font-size: 12px;
+      color: var(--text-dim);
+      font-weight: 600;
+    }
+    .step.done .step-subtitle { color: var(--positive); }
+
+    .step-body {
+      padding: 0 18px 18px;
+    }
+    .step-desc {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.5;
+      margin-bottom: 14px;
+    }
+
+    /* ── Labels ────────────────────────────────────────────────────────────── */
+    label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      margin-bottom: 8px;
+    }
+
+    /* ── Inputs ────────────────────────────────────────────────────────────── */
+    textarea, input[type="text"], input[type="month"] {
+      width: 100%;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      color: var(--text);
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 1.5;
+      resize: vertical;
+      transition: border-color .15s;
+      -webkit-appearance: none;
+    }
+    textarea:focus, input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    textarea { min-height: 110px; }
+    input[type="file"] {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-bottom: 10px;
+    }
+    input[type="file"]::file-selector-button {
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 6px 12px;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+    input[type="month"] {
+      width: auto;
+      min-width: 150px;
+      color-scheme: dark;
+    }
+
+    /* ── Buttons ───────────────────────────────────────────────────────────── */
+    .btn {
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 10px 18px;
+      line-height: 1;
+      transition: opacity .15s, transform .1s, background .15s;
       display: inline-flex;
       align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-    @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
-
-    label { display: block; font-size: 0.78rem; font-weight: 600; color: #555;
-            text-transform: uppercase; letter-spacing: .04em; margin-bottom: .35rem; }
-
-    textarea, input[type="text"] {
-      width: 100%; border: 1.5px solid #d1d5db; border-radius: 8px;
-      padding: .65rem .75rem; font-size: .9rem; line-height: 1.5;
-      resize: vertical; transition: border-color .15s;
-    }
-    textarea:focus, input:focus { outline: none; border-color: #00c389; }
-    textarea { min-height: 120px; }
-
-    /* Buttons */
-    .btn {
-      border: none; border-radius: 8px; cursor: pointer;
-      font-size: .875rem; font-weight: 600; padding: .6rem 1.1rem;
-      transition: opacity .15s, transform .1s;
+      gap: 6px;
     }
     .btn:active  { transform: scale(.97); }
     .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
-    .btn-primary  { background: #00c389; color: #fff; }
-    .btn-secondary{ background: #f3f4f6; color: #333; }
-    .btn-danger   { background: #ef4444; color: #fff; }
-    .btn-sim      { background: #f59e0b; color: #fff; font-size: .78rem; padding: .35rem .75rem; }
-    .btn-sm       { padding: .35rem .75rem; font-size: .78rem; }
+    .btn-primary  { background: var(--accent); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #e8266e; }
+    .btn-secondary { background: var(--surface-3); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover:not(:disabled) { background: var(--border); border-color: var(--border-2); }
+    .btn-danger   { background: var(--danger); color: #fff; }
+    .btn-sim      { background: rgba(255,184,77,.15); color: var(--pending); border: 1px solid rgba(255,184,77,.3); font-size: 12px; padding: 6px 12px; border-radius: 8px; }
+    .btn-sim:hover:not(:disabled) { background: rgba(255,184,77,.25); }
+    .btn-sm       { padding: 7px 12px; font-size: 12px; border-radius: 10px; }
+    .btn-row      { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 
-    .btn-row { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: .75rem; }
-
-    /* Recording status */
-    .status-row { display: flex; align-items: center; gap: .5rem; min-height: 1.4rem; margin-bottom: .75rem; }
-    .dot { width: 9px; height: 9px; border-radius: 50%; background: #ccc; flex-shrink: 0; }
-    .dot.recording { background: #ef4444; animation: pulse 1s infinite; }
-    .dot.ready { background: #00c389; }
-    .dot.loading { background: #f59e0b; }
+    /* ── Recording status ──────────────────────────────────────────────────── */
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 22px;
+      margin-bottom: 12px;
+    }
+    .dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: var(--border-2);
+      flex-shrink: 0;
+    }
+    .dot.recording { background: var(--danger); animation: pulse 1s infinite; }
+    .dot.ready     { background: var(--positive); }
+    .dot.loading   { background: var(--pending); }
     @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
-    .status-text { font-size: .82rem; color: #555; }
-    .timer { margin-left: auto; font-size: .82rem; font-variant-numeric: tabular-nums;
-             color: #ef4444; font-weight: 600; }
+    .status-text { font-size: 13px; color: var(--text-dim); }
+    .timer {
+      margin-left: auto;
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      color: var(--danger);
+      font-weight: 700;
+    }
 
-    audio { width: 100%; margin-top: .6rem; display: none; }
+    audio {
+      width: 100%;
+      margin-top: 10px;
+      display: none;
+      border-radius: 8px;
+      filter: invert(1) hue-rotate(180deg);
+    }
     audio.visible { display: block; }
 
-    /* Results table */
-    table { width: 100%; border-collapse: collapse; font-size: .88rem; }
-    th { background: #f8f9fa; padding: .55rem .75rem; text-align: left;
-         font-size: .75rem; font-weight: 700; color: #666;
-         text-transform: uppercase; letter-spacing: .04em; }
-    td { padding: .6rem .75rem; border-top: 1px solid #f0f0f0; vertical-align: middle; }
-    tr:hover td { background: #fafafa; }
-
-    .badge {
-      display: inline-flex; align-items: center; gap: .3rem;
-      padding: .2rem .55rem; border-radius: 20px; font-size: .75rem; font-weight: 600;
+    /* ── Error box ─────────────────────────────────────────────────────────── */
+    .error-box {
+      display: none;
+      background: rgba(255,77,106,.12);
+      border: 1px solid rgba(255,77,106,.35);
+      border-radius: 12px;
+      padding: 10px 14px;
+      color: #ff8fa3;
+      font-size: 13px;
+      margin-top: 12px;
     }
-    .badge-paid    { background: #d1fae5; color: #065f46; }
-    .badge-pending { background: #fef3c7; color: #92400e; }
-    .badge-self    { background: #e0e7ff; color: #3730a3; }
+    .error-box.visible { display: block; }
 
-    .link-btn { font-size: .78rem; color: #00c389; text-decoration: none; font-weight: 600; }
+    /* ── Image preview ─────────────────────────────────────────────────────── */
+    #capturedPreviewWrap { display: none; margin-top: 10px; }
+    #capturedPreview {
+      max-width: 100%;
+      border-radius: 14px;
+      border: 2px solid var(--positive);
+      display: block;
+    }
+
+    /* ── Results table ─────────────────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; margin-top: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      background: var(--surface-2);
+      padding: 10px 12px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+    th:first-child { border-radius: 10px 0 0 10px; }
+    th:last-child  { border-radius: 0 10px 10px 0; }
+    td {
+      padding: 12px 12px;
+      border-top: 1px solid var(--border);
+      vertical-align: middle;
+      color: var(--text);
+    }
+    tr:hover td { background: rgba(255,255,255,.025); }
+
+    /* ── Badges ────────────────────────────────────────────────────────────── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .badge-paid    { background: rgba(43,217,166,.15); color: var(--positive); }
+    .badge-pending { background: rgba(255,184,77,.15); color: var(--pending); }
+    .badge-self    { background: rgba(160,86,255,.15); color: #c490ff; }
+    .badge-footnote {
+      background: rgba(43,217,166,.15);
+      color: var(--positive);
+      border-radius: 8px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .link-btn {
+      font-size: 12px;
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }
     .link-btn:hover { text-decoration: underline; }
 
-    /* Footnote JSON */
+    /* ── Summary boxes (step 4 + summary totals) ───────────────────────────── */
+    .summary-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+    .summary-box {
+      flex: 1;
+      min-width: 120px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px 16px;
+      text-align: center;
+    }
+    .summary-box .label {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .summary-box .value {
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      color: var(--text);
+    }
+    .summary-box.highlight { border-color: rgba(43,217,166,.35); }
+    .summary-box.highlight .value { color: var(--positive); }
+
+    /* ── Footnote JSON ─────────────────────────────────────────────────────── */
     .json-block {
-      background: #1e1e2e; color: #cdd6f4; border-radius: 8px;
-      padding: 1rem; font-family: "Fira Code", "Consolas", monospace;
-      font-size: .82rem; line-height: 1.6; overflow-x: auto; white-space: pre;
+      background: #0d0d11;
+      border: 1px solid var(--border);
+      color: #cdd6f4;
+      border-radius: 14px;
+      padding: 16px;
+      font-family: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.65;
+      overflow-x: auto;
+      white-space: pre;
     }
     .json-key    { color: #89b4fa; }
     .json-str    { color: #a6e3a1; }
@@ -133,307 +423,440 @@
     .json-bool-f { color: #f38ba8; }
     .json-null   { color: #9399b2; }
 
-    /* Net cost summary */
-    .summary-row {
-      display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem;
+    /* ── Expense picker ────────────────────────────────────────────────────── */
+    .expense-section {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
     }
-    .summary-box {
-      flex: 1; min-width: 130px; background: #f8f9fa; border-radius: 8px;
-      padding: .75rem 1rem; text-align: center;
+    .expense-section-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 6px;
     }
-    .summary-box .label { font-size: .7rem; color: #888; text-transform: uppercase;
-                          letter-spacing: .05em; margin-bottom: .2rem; }
-    .summary-box .value { font-size: 1.3rem; font-weight: 800; color: #111; }
-    .summary-box.highlight .value { color: #00c389; }
-
-    /* Error */
-    .error-box { display: none; background: #fef2f2; border: 1px solid #fca5a5;
-                 border-radius: 8px; padding: .6rem 1rem; color: #b91c1c;
-                 font-size: .82rem; margin-top: .75rem; }
-    .error-box.visible { display: block; }
-
-    .hidden { display: none !important; }
-
-    /* Expense picker */
-    .expense-section { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #f0f0f0; }
+    .expense-section p {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-bottom: 10px;
+    }
+    .expense-picker-list {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 10px;
+      background: var(--surface-2);
+    }
     .expense-item {
-      padding: .55rem .75rem; cursor: pointer; border-bottom: 1px solid #f0f0f0;
-      font-size: .85rem; display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 14px;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
       transition: background .1s;
     }
     .expense-item:last-child { border-bottom: none; }
-    .expense-item:hover { background: #f0fdf4; }
-    .expense-item .exp-desc { color: #333; font-weight: 500; }
-    .expense-item .exp-meta { font-size: .78rem; color: #888; white-space: nowrap; margin-left: .5rem; }
-    .expense-picker-list {
-      border: 1px solid #e5e7eb; border-radius: 8px; max-height: 200px;
-      overflow-y: auto; margin-top: .75rem;
-    }
+    .expense-item:hover { background: var(--surface-3); }
+    .expense-item .exp-desc { color: var(--text); font-weight: 600; }
+    .expense-item .exp-meta { font-size: 12px; color: var(--text-dim); white-space: nowrap; margin-left: 8px; }
     .linked-badge {
-      display: inline-flex; align-items: center; gap: .4rem;
-      background: #d1fae5; color: #065f46; border-radius: 6px;
-      padding: .25rem .65rem; font-size: .78rem; font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(43,217,166,.15);
+      color: var(--positive);
+      border: 1px solid rgba(43,217,166,.3);
+      border-radius: 10px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 700;
     }
     .linked-badge button {
-      border: none; background: none; cursor: pointer; color: #065f46;
-      font-size: 1rem; line-height: 1; padding: 0; margin-left: .15rem;
+      border: none;
+      background: none;
+      cursor: pointer;
+      color: var(--positive);
+      font-size: 14px;
+      line-height: 1;
+      padding: 0;
+      opacity: .7;
     }
+    .linked-badge button:hover { opacity: 1; }
 
-    /* Monthly summary */
+    /* ── Monthly summary — transaction table ───────────────────────────────── */
     .summary-expense-row td { vertical-align: top; }
-    .reimbursement-chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+    .reimbursement-chips { display: flex; flex-wrap: wrap; gap: 4px; }
     .chip {
-      display: inline-flex; align-items: center; gap: .2rem;
-      background: #dbeafe; color: #1e40af; border-radius: 12px;
-      padding: .15rem .5rem; font-size: .72rem; font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      background: rgba(61,169,255,.15);
+      color: #7ec8ff;
+      border: 1px solid rgba(61,169,255,.25);
+      border-radius: 999px;
+      padding: 3px 9px;
+      font-size: 11px;
+      font-weight: 700;
     }
-    .net-cost-cell { font-weight: 700; color: #00c389; }
-    .net-cost-cell.full { color: #111; }
+    .net-cost-cell { font-weight: 800; color: var(--positive); }
+    .net-cost-cell.full { color: var(--text); }
 
-    .spinner { display: inline-block; width: 14px; height: 14px;
-               border: 2px solid #fff; border-top-color: transparent;
-               border-radius: 50%; animation: spin .6s linear infinite;
-               vertical-align: middle; margin-right: .4rem; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    /* ── Category insights grid ────────────────────────────────────────────── */
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1.4px;
+      margin-bottom: 10px;
+    }
+    .insights-grid { display: grid; gap: 8px; margin-top: 4px; }
 
-    /* Monthly Insights */
-    .insights-grid { display: grid; gap: .75rem; margin-top: 1.25rem; }
     .category-row {
-      border: 1px solid #f0f0f0; border-radius: 10px; overflow: hidden;
-      cursor: pointer; transition: box-shadow .15s;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color .15s;
     }
-    .category-row:hover { box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+    .category-row:hover { border-color: var(--border-2); }
     .category-header {
-      display: flex; align-items: center; gap: .75rem; padding: .75rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
       position: relative;
     }
     .cat-bar {
       position: absolute; left: 0; top: 0; bottom: 0;
-      opacity: .12; border-radius: 10px; pointer-events: none;
+      opacity: .1; border-radius: 14px; pointer-events: none;
       transition: width .4s ease;
     }
-    .cat-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; z-index: 1; }
-    .cat-label { font-weight: 700; font-size: .9rem; flex: 1; z-index: 1; }
-    .cat-count { font-size: .75rem; color: #888; z-index: 1; white-space: nowrap; }
-    .cat-amount { font-weight: 800; font-size: 1rem; z-index: 1; white-space: nowrap; }
-    .cat-chevron { color: #aaa; font-size: .75rem; z-index: 1; transition: transform .2s; }
+    .cat-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; z-index: 1; }
+    .cat-label { font-weight: 700; font-size: 14px; flex: 1; z-index: 1; }
+    .cat-count { font-size: 12px; color: var(--text-dim); z-index: 1; white-space: nowrap; }
+    .cat-amount { font-weight: 900; font-size: 15px; z-index: 1; white-space: nowrap; letter-spacing: -0.3px; }
+    .cat-chevron { color: var(--text-muted); font-size: 11px; z-index: 1; transition: transform .2s; }
     .category-row.open .cat-chevron { transform: rotate(180deg); }
-    .cat-transactions { display: none; border-top: 1px solid #f5f5f5; }
+    .cat-transactions { display: none; border-top: 1px solid var(--border); }
     .category-row.open .cat-transactions { display: block; }
     .cat-txn-row {
-      display: flex; align-items: center; gap: .6rem; padding: .5rem 1rem;
-      border-bottom: 1px solid #f8f8f8; font-size: .82rem; flex-wrap: wrap;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 14px;
+      border-bottom: 1px solid rgba(255,255,255,.04);
+      font-size: 12px;
+      flex-wrap: wrap;
     }
     .cat-txn-row:last-child { border-bottom: none; }
-    .cat-txn-date { color: #999; white-space: nowrap; min-width: 80px; }
-    .cat-txn-desc { flex: 1; color: #333; }
-    .cat-txn-amounts { display: flex; align-items: center; gap: .4rem; white-space: nowrap; }
-    .cat-txn-gross { color: #aaa; text-decoration: line-through; font-size: .78rem; }
-    .cat-txn-net { font-weight: 700; color: #111; }
-    .badge-footnote {
-      background: #d1fae5; color: #065f46; border-radius: 10px;
-      padding: .1rem .45rem; font-size: .68rem; font-weight: 700; white-space: nowrap;
-    }
-    .insights-totals { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem; }
+    .cat-txn-date { color: var(--text-dim); white-space: nowrap; min-width: 80px; }
+    .cat-txn-desc { flex: 1; color: var(--text); }
+    .cat-txn-amounts { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .cat-txn-gross { color: var(--text-muted); text-decoration: line-through; font-size: 11px; }
+    .cat-txn-net { font-weight: 700; color: var(--text); }
 
-    /* Camera modal */
+    /* ── Spinner ───────────────────────────────────────────────────────────── */
+    .spinner {
+      display: inline-block;
+      width: 13px; height: 13px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      vertical-align: middle;
+      margin-right: 4px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Utility ───────────────────────────────────────────────────────────── */
+    .hidden { display: none !important; }
+
+    /* ── Camera modal ──────────────────────────────────────────────────────── */
     .cam-overlay {
-      display: none; position: fixed; inset: 0;
-      background: rgba(0,0,0,.85); z-index: 999;
-      flex-direction: column; align-items: center; justify-content: center; gap: 1rem;
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.92);
+      z-index: 999;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
     }
     .cam-overlay.open { display: flex; }
     .cam-overlay video {
-      max-width: min(96vw, 640px); max-height: 65vh;
-      border-radius: 10px; background: #000;
+      max-width: min(96vw, 640px);
+      max-height: 62vh;
+      border-radius: 14px;
+      background: #000;
     }
     .cam-overlay canvas { display: none; }
     .cam-preview-img {
-      display: none; max-width: min(96vw, 640px); max-height: 65vh;
-      border-radius: 10px; border: 2px solid #00c389;
+      display: none;
+      max-width: min(96vw, 640px);
+      max-height: 62vh;
+      border-radius: 14px;
+      border: 2px solid var(--positive);
     }
-    .cam-overlay .cam-btn-row { display: flex; gap: .75rem; }
-    .btn-capture { background: #fff; color: #111; font-size: 1.1rem;
-                   padding: .65rem 1.4rem; border-radius: 8px; border: none;
-                   cursor: pointer; font-weight: 700; }
+    .cam-btn-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    .btn-capture {
+      background: #fff;
+      color: #111;
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 800;
+      padding: 12px 24px;
+      border-radius: 14px;
+      border: none;
+      cursor: pointer;
+      transition: background .15s;
+    }
     .btn-capture:hover { background: #e5e7eb; }
-    .cam-tip { color: #aaa; font-size: .78rem; }
+    .cam-tip { color: var(--text-dim); font-size: 13px; }
+
+    /* ── Footer rainbow ────────────────────────────────────────────────────── */
+    .footer-bar {
+      margin-top: auto;
+      height: 6px;
+      background: linear-gradient(90deg,
+        #ff2d87, #ff5a3d, #ffb84d, #ffe14d, #2bd9a6, #3da9ff, #a056ff);
+    }
+
+    /* ── Avatar (person chip) ──────────────────────────────────────────────── */
+    .person-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .avatar-sm {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      font-weight: 800;
+      color: #0b0b0d;
+      flex: 0 0 30px;
+    }
+
+    /* ── Divider ───────────────────────────────────────────────────────────── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 16px 0;
+    }
   </style>
 </head>
 <body>
 
-<header>
-  <h1>SplitBill</h1>
-  <span>powered by bunq + Claude</span>
-</header>
+<div class="app">
 
-<main>
+  <!-- Brand -->
+  <header class="brand">
+    <h1>bunq<span class="dot">.</span></h1>
+    <div class="tagline">SplitBill · powered by Claude</div>
+  </header>
+  <div class="rainbow-bar" aria-hidden="true"></div>
 
-  <!-- ── Step 1 + 2: Inputs ───────────────────────────────────────────────── -->
+  <!-- Page intro -->
+  <div class="page-intro">
+    <div class="eyebrow">SplitBill</div>
+    <h2>Split receipts with friends</h2>
+    <p>Scan a receipt, record who ordered what, and send payment requests — automatically netted against your bunq account.</p>
+  </div>
+
+  <!-- ── Steps 1 + 2: Receipt & Voice (side by side) ─────────────────────── -->
   <div class="two-col">
 
-    <!-- Receipt OCR -->
-    <div class="card">
-      <div class="card-title"><span class="step-badge">1</span> Receipt</div>
-      <!-- Hidden input used as camera fallback on HTTP/mobile (no getUserMedia) -->
-      <input type="file" id="nativeCameraInput" accept="image/*" capture="environment" style="display:none" onchange="onNativeCameraCapture(this)">
-      <label for="imageInput">Upload or capture receipt</label>
-      <input type="file" id="imageInput" accept="image/*" style="margin-bottom:.75rem;font-size:.85rem;" onchange="onFileSelected()">
-      <div class="btn-row" style="margin-top:0">
-        <button class="btn btn-secondary btn-sm" id="btnCamera" onclick="openCamera()">📷 Take Photo</button>
-        <button class="btn btn-secondary btn-sm" id="btnOcr" onclick="runOcr()" disabled>Extract Text</button>
+    <!-- Step 1: Receipt -->
+    <div class="step active">
+      <div class="step-head">
+        <div class="step-num">1</div>
+        <div class="step-title">Receipt</div>
+        <div class="step-subtitle">OCR</div>
       </div>
-      <div id="capturedPreviewWrap" style="display:none;margin-top:.75rem;">
-        <img id="capturedPreview" style="max-width:100%;border-radius:8px;border:1.5px solid #00c389;" alt="Captured receipt">
-      </div>
-      <div class="error-box" id="ocrError"></div>
-      <div style="margin-top:.75rem;">
-        <label for="ocrText">Receipt text</label>
-        <textarea id="ocrText" placeholder="Receipt items will appear here — or paste manually."></textarea>
+      <div class="step-body">
+        <input type="file" id="nativeCameraInput" accept="image/*" capture="environment" style="display:none" onchange="onNativeCameraCapture(this)">
+        <label for="imageInput">Upload or capture receipt</label>
+        <input type="file" id="imageInput" accept="image/*" onchange="onFileSelected()">
+        <div class="btn-row" style="margin-top:0">
+          <button class="btn btn-secondary btn-sm" id="btnCamera" onclick="openCamera()">📷 Photo</button>
+          <button class="btn btn-secondary btn-sm" id="btnOcr" onclick="runOcr()" disabled>Extract Text</button>
+        </div>
+        <div id="capturedPreviewWrap">
+          <img id="capturedPreview" alt="Captured receipt">
+        </div>
+        <div class="error-box" id="ocrError"></div>
+        <div style="margin-top:14px;">
+          <label for="ocrText">Receipt text</label>
+          <textarea id="ocrText" placeholder="Receipt items appear here — or paste manually."></textarea>
+        </div>
       </div>
     </div>
 
-    <!-- Voice -->
-    <div class="card">
-      <div class="card-title"><span class="step-badge">2</span> Voice memo</div>
-      <div class="status-row">
-        <div class="dot" id="dot"></div>
-        <span class="status-text" id="statusText">Ready to record</span>
-        <span class="timer" id="timer" style="display:none"></span>
+    <!-- Step 2: Voice -->
+    <div class="step active">
+      <div class="step-head">
+        <div class="step-num">2</div>
+        <div class="step-title">Voice memo</div>
+        <div class="step-subtitle">Transcript</div>
       </div>
-      <div class="btn-row" style="margin-top:0">
-        <button class="btn btn-danger btn-sm" id="btnRecord" onclick="startRec()">&#9679; Record</button>
-        <button class="btn btn-secondary btn-sm" id="btnStop" disabled onclick="stopRec()">&#9632; Stop</button>
-        <button class="btn btn-secondary btn-sm" id="btnTranscribe" disabled onclick="doTranscribe()">&#9654; Transcribe</button>
+      <div class="step-body">
+        <div class="status-row">
+          <div class="dot" id="dot"></div>
+          <span class="status-text" id="statusText">Ready to record</span>
+          <span class="timer" id="timer" style="display:none"></span>
+        </div>
+        <div class="btn-row" style="margin-top:0">
+          <button class="btn btn-danger btn-sm" id="btnRecord" onclick="startRec()">&#9679; Record</button>
+          <button class="btn btn-secondary btn-sm" id="btnStop" disabled onclick="stopRec()">&#9632; Stop</button>
+          <button class="btn btn-secondary btn-sm" id="btnTranscribe" disabled onclick="doTranscribe()">&#9654; Transcribe</button>
+        </div>
+        <audio id="audioPreview" controls></audio>
+        <div style="margin-top:14px;">
+          <label for="transcript">Transcript</label>
+          <textarea id="transcript" placeholder="Transcription appears here — or type/paste."></textarea>
+        </div>
+        <div class="error-box" id="voiceError"></div>
       </div>
-      <audio id="audioPreview" controls></audio>
-      <div style="margin-top:.75rem;">
-        <label for="transcript">Transcript</label>
-        <textarea id="transcript" placeholder="Transcription appears here — or type/paste."></textarea>
-      </div>
-      <div class="error-box" id="voiceError"></div>
     </div>
   </div>
 
   <!-- ── Step 3: Split ────────────────────────────────────────────────────── -->
-  <div class="card">
-    <div class="card-title"><span class="step-badge">3</span> Split the bill</div>
-    <div class="btn-row" style="margin-top:0">
-      <button class="btn btn-primary" id="btnSplit" onclick="doSplit()">Split Bill</button>
-      <button class="btn btn-secondary" id="btnLinks" disabled onclick="doLinks()">Create Payment Links</button>
-      <button class="btn btn-secondary" id="btnRefresh" disabled onclick="doReconcile()">&#8635; Refresh Status</button>
+  <div class="step active">
+    <div class="step-head">
+      <div class="step-num">3</div>
+      <div class="step-title">Split the bill</div>
+      <div class="step-subtitle">Claude AI</div>
     </div>
-    <!-- Expense transaction linking (optional — enables Tikkie netting in monthly summary) -->
-    <div class="expense-section">
-      <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
-        <label style="margin:0;">Link Expense Transaction</label>
-        <button class="btn btn-secondary btn-sm" id="btnLoadExpenses" onclick="loadExpenses()">Pick from Bunq</button>
-        <div id="linkedExpenseBadge" class="linked-badge hidden">
-          <span id="linkedExpenseLabel"></span>
-          <button onclick="clearLinkedExpense()" title="Clear">&#215;</button>
-        </div>
+    <div class="step-body">
+      <div class="btn-row" style="margin-top:0">
+        <button class="btn btn-primary" id="btnSplit" onclick="doSplit()">Split Bill</button>
+        <button class="btn btn-secondary" id="btnLinks" disabled onclick="doLinks()">Create Payment Links</button>
+        <button class="btn btn-secondary" id="btnRefresh" disabled onclick="doReconcile()">&#8635; Refresh Status</button>
       </div>
-      <p style="font-size:.78rem;color:#888;margin-top:.35rem;">
-        Select the original payment (e.g. dinner bill) so Tikkie reimbursements
-        are tracked against it in your monthly summary.
-      </p>
-      <div id="expensePickerList" class="expense-picker-list hidden"></div>
+
+      <!-- Expense linking -->
+      <div class="expense-section">
+        <div class="expense-section-label">
+          <label style="margin:0;">Link Bunq Transaction</label>
+          <button class="btn btn-secondary btn-sm" id="btnLoadExpenses" onclick="loadExpenses()">Pick from bunq</button>
+          <div id="linkedExpenseBadge" class="linked-badge hidden">
+            <span id="linkedExpenseLabel"></span>
+            <button onclick="clearLinkedExpense()" title="Clear">&#215;</button>
+          </div>
+        </div>
+        <p>Link the original payment so Tikkie reimbursements net against it in your monthly summary.</p>
+        <div id="expensePickerList" class="expense-picker-list hidden"></div>
+      </div>
+      <div class="error-box" id="splitError"></div>
     </div>
-    <div class="error-box" id="splitError"></div>
   </div>
 
   <!-- ── Step 4: Results ──────────────────────────────────────────────────── -->
-  <div class="card hidden" id="resultsCard">
-    <div class="card-title"><span class="step-badge">4</span> Results</div>
-
-    <div class="summary-row" id="summaryRow"></div>
-
-    <div style="overflow-x:auto; margin-top:1.25rem;">
-      <table id="resultsTable">
-        <thead>
-          <tr>
-            <th>Person</th>
-            <th>Items</th>
-            <th>Amount</th>
-            <th>Status</th>
-            <th>Payment link</th>
-            <th>Simulate Tikkie</th>
-          </tr>
-        </thead>
-        <tbody id="resultsBody"></tbody>
-      </table>
+  <div class="step hidden" id="resultsCard">
+    <div class="step-head">
+      <div class="step-num">4</div>
+      <div class="step-title">Results</div>
+      <div class="step-subtitle">Split breakdown</div>
+    </div>
+    <div class="step-body">
+      <div class="summary-row" id="summaryRow"></div>
+      <div class="table-wrap">
+        <table id="resultsTable">
+          <thead>
+            <tr>
+              <th>Person</th>
+              <th>Items</th>
+              <th>Amount</th>
+              <th>Status</th>
+              <th>Payment link</th>
+              <th>Simulate Tikkie</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
-  <!-- ── Step 5: Footnote JSON ────────────────────────────────────────────── -->
-  <div class="card hidden" id="footnoteCard">
-    <div class="card-title"><span class="step-badge">5</span> Payment footnote</div>
-    <p style="font-size:.82rem;color:#666;margin-bottom:.75rem;">
-      Live reconciliation against your bunq transaction history.
-      Click <strong>Refresh Status</strong> after simulating a payment.
-    </p>
-    <div class="json-block" id="footnoteJson"></div>
+  <!-- ── Step 5: Footnote ─────────────────────────────────────────────────── -->
+  <div class="step hidden" id="footnoteCard">
+    <div class="step-head">
+      <div class="step-num">5</div>
+      <div class="step-title">Payment footnote</div>
+      <div class="step-subtitle">Reconciliation</div>
+    </div>
+    <div class="step-body">
+      <p class="step-desc">Live reconciliation against your bunq transaction history. Click <strong style="color:var(--text)">Refresh Status</strong> after simulating a payment.</p>
+      <div class="json-block" id="footnoteJson"></div>
+    </div>
   </div>
 
   <!-- ── Step 6: Monthly Summary ──────────────────────────────────────────── -->
-  <div class="card" id="monthlySummaryCard">
-    <div class="card-title"><span class="step-badge">6</span> Monthly Summary</div>
-    <p style="font-size:.82rem;color:#666;margin-bottom:.75rem;">
-      Your actual personal expenses after netting out Tikkie reimbursements.
-      Tikkies created through this app are offset against the linked expense —
-      they do not appear as income.
-    </p>
-    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
-      <input type="month" id="monthPicker"
-             style="padding:.5rem .75rem;font-size:.85rem;border:1.5px solid #d1d5db;border-radius:8px;color:#111;">
-      <button class="btn btn-primary" id="btnLoadSummary" onclick="loadSummary()">Load Summary</button>
+  <div class="step active" id="monthlySummaryCard">
+    <div class="step-head">
+      <div class="step-num">6</div>
+      <div class="step-title">Monthly Summary</div>
+      <div class="step-subtitle">Insights</div>
     </div>
+    <div class="step-body">
+      <p class="step-desc">Your actual personal expenses after netting out Tikkie reimbursements. Tikkies created through this app are offset against the linked expense — they do not appear as income.</p>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <input type="month" id="monthPicker">
+        <button class="btn btn-primary" id="btnLoadSummary" onclick="loadSummary()">Load Summary</button>
+      </div>
 
-    <div id="summaryResults" class="hidden" style="margin-top:1.25rem;">
-      <div class="summary-row" id="summaryTotals"></div>
+      <div id="summaryResults" class="hidden" style="margin-top:20px;">
+        <!-- Totals -->
+        <div class="summary-row" id="summaryTotals"></div>
 
-      <!-- Category breakdown (net spend per category) -->
-      <div style="margin-top:1.5rem;">
-        <div style="font-size:.78rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.6rem;">
-          Spend by Category
+        <!-- Spend by Category -->
+        <div style="margin-top:24px;">
+          <div class="section-label">Spend by Category</div>
+          <div class="insights-grid" id="summaryCatGrid"></div>
         </div>
-        <div class="insights-grid" id="summaryCatGrid"></div>
-      </div>
 
-      <div style="margin-top:1.5rem;font-size:.78rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem;">
-        All Transactions
-      </div>
-      <div style="overflow-x:auto;">
-        <table>
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Description</th>
-              <th>Gross</th>
-              <th>Reimbursements</th>
-              <th>Your Cost</th>
-            </tr>
-          </thead>
-          <tbody id="summaryExpBody"></tbody>
-        </table>
-      </div>
-
-      <div id="summaryIncomeSection" class="hidden" style="margin-top:1.5rem;">
-        <div style="font-size:.78rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem;">
-          Other Income
+        <!-- All Transactions -->
+        <div style="margin-top:24px;">
+          <div class="section-label">All Transactions</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Gross</th>
+                  <th>Reimbursements</th>
+                  <th>Your Cost</th>
+                </tr>
+              </thead>
+              <tbody id="summaryExpBody"></tbody>
+            </table>
+          </div>
         </div>
-        <div style="overflow-x:auto;">
-          <table>
-            <thead><tr><th>Date</th><th>Description</th><th>Amount</th></tr></thead>
-            <tbody id="summaryIncBody"></tbody>
-          </table>
+
+        <!-- Other Income (hidden when empty) -->
+        <div id="summaryIncomeSection" class="hidden" style="margin-top:24px;">
+          <div class="section-label">Other Income</div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Date</th><th>Description</th><th>Amount</th></tr></thead>
+              <tbody id="summaryIncBody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-
-</main>
+  <div class="footer-bar" aria-hidden="true" style="margin-top:32px;"></div>
+</div>
 
 <!-- ── Camera modal ─────────────────────────────────────────────────────────── -->
 <div class="cam-overlay" id="camOverlay">
@@ -442,7 +865,7 @@
   <img class="cam-preview-img" id="camPreviewImg" alt="Captured photo">
   <div class="cam-btn-row">
     <button class="btn-capture" id="btnSnap" onclick="snapPhoto()">📸 Snap</button>
-    <button class="btn btn-primary btn-sm" id="btnUsePhoto" style="display:none" onclick="usePhoto()">Use this photo →</button>
+    <button class="btn btn-primary btn-sm" id="btnUsePhoto" style="display:none" onclick="usePhoto()">Use this →</button>
     <button class="btn btn-secondary btn-sm" id="btnRetake" style="display:none" onclick="retakePhoto()">↩ Retake</button>
     <button class="btn btn-secondary btn-sm" onclick="closeCamera()">✕ Cancel</button>
   </div>
@@ -679,12 +1102,12 @@ async function loadExpenses() {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Loading…';
   list.classList.remove("hidden");
-  list.innerHTML = '<div style="padding:.75rem;color:#888;font-size:.85rem;">Fetching transactions…</div>';
+  list.innerHTML = '<div style="padding:.75rem;color:var(--text-dim);font-size:.85rem;">Fetching transactions…</div>';
   try {
     const res = await fetch("/api/recent-expenses");
     const data = await res.json();
-    if (data.error) { list.innerHTML = `<div style="padding:.75rem;color:#b91c1c">${esc(data.error)}</div>`; return; }
-    if (!data.length) { list.innerHTML = '<div style="padding:.75rem;color:#888;font-size:.85rem;">No recent outgoing transactions found.</div>'; return; }
+    if (data.error) { list.innerHTML = `<div style="padding:.75rem;color:var(--danger)">${esc(data.error)}</div>`; return; }
+    if (!data.length) { list.innerHTML = '<div style="padding:.75rem;color:var(--text-dim);font-size:.85rem;">No recent outgoing transactions found.</div>'; return; }
     list.innerHTML = data.map(e => `
       <div class="expense-item"
            data-id="${e.id}"
@@ -697,10 +1120,10 @@ async function loadExpenses() {
     `).join("");
     list.addEventListener("click", onExpenseItemClick);
   } catch (err) {
-    list.innerHTML = `<div style="padding:.75rem;color:#b91c1c">${esc(err.message)}</div>`;
+    list.innerHTML = `<div style="padding:.75rem;color:var(--danger)">${esc(err.message)}</div>`;
   } finally {
     btn.disabled = false;
-    btn.textContent = "Pick from Bunq";
+    btn.textContent = "Pick from bunq";
   }
 }
 
@@ -797,7 +1220,8 @@ async function simulateTikkie(person, amount, btn) {
     const data = await res.json();
     if (data.error) { alert("Simulate error: " + data.error); return; }
     btn.textContent = "✓ Sent";
-    btn.style.background = "#00c389";
+    btn.style.background = "rgba(43,217,166,.2)";
+    btn.style.color = "var(--positive)";
     setTimeout(() => doReconcile(), 1500);
   } catch (err) {
     alert("Error: " + err.message);
@@ -808,6 +1232,19 @@ async function simulateTikkie(person, amount, btn) {
 
 // ── Render helpers ────────────────────────────────────────────────────────────
 const SELF_NAMES = new Set(["you", "me", "i"]);
+
+const AVATAR_COLORS = [
+  "#ff2d87", "#ff7a3d", "#ffb84d", "#2bd9a6",
+  "#3da9ff", "#a056ff", "#ff4dd2", "#ffe14d"
+];
+function colorFor(name) {
+  let h = 0;
+  for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+function initials(name) {
+  return String(name).trim().split(/\s+/).map(s => s[0]).slice(0, 2).join("").toUpperCase();
+}
 
 function renderResults(split, reconcile) {
   if (!split) return;
@@ -821,10 +1258,10 @@ function renderResults(split, reconcile) {
   const remaining = reconcile ? reconcile.remaining_owed : null;
 
   document.getElementById("summaryRow").innerHTML = `
-    <div class="summary-box"><div class="label">You paid</div><div class="value">€${total.toFixed(2)}</div></div>
-    <div class="summary-box"><div class="label">Received back</div><div class="value">€${repaid.toFixed(2)}</div></div>
-    <div class="summary-box highlight"><div class="label">Net cost</div><div class="value">€${netCost.toFixed(2)}</div></div>
-    ${remaining !== null ? `<div class="summary-box"><div class="label">Still owed</div><div class="value">€${remaining.toFixed(2)}</div></div>` : ""}
+    <div class="summary-box"><div class="label">You paid</div><div class="value">&euro;${total.toFixed(2)}</div></div>
+    <div class="summary-box"><div class="label">Received back</div><div class="value">&euro;${repaid.toFixed(2)}</div></div>
+    <div class="summary-box highlight"><div class="label">Net cost</div><div class="value">&euro;${netCost.toFixed(2)}</div></div>
+    ${remaining !== null ? `<div class="summary-box"><div class="label">Still owed</div><div class="value">&euro;${remaining.toFixed(2)}</div></div>` : ""}
   `;
 
   // Build payment status lookup
@@ -839,6 +1276,7 @@ function renderResults(split, reconcile) {
   split.people.forEach(person => {
     const isSelf = SELF_NAMES.has(person.name.toLowerCase());
     const rec = statusMap[person.name];
+    const color = colorFor(person.name);
 
     let badgeHtml;
     if (isSelf) {
@@ -859,9 +1297,14 @@ function renderResults(split, reconcile) {
 
     tbody.innerHTML += `
       <tr>
-        <td><strong>${person.name}</strong></td>
-        <td style="color:#555;font-size:.82rem">${itemsList}</td>
-        <td><strong>€${Number(person.total_owed).toFixed(2)}</strong></td>
+        <td>
+          <div class="person-name">
+            <div class="avatar-sm" style="background:${color}">${initials(person.name)}</div>
+            <strong>${person.name}</strong>
+          </div>
+        </td>
+        <td style="color:var(--text-dim);font-size:12px">${itemsList}</td>
+        <td><strong>&euro;${Number(person.total_owed).toFixed(2)}</strong></td>
         <td>${badgeHtml}</td>
         <td>${linkHtml}</td>
         <td>${simHtml}</td>
@@ -891,11 +1334,11 @@ function syntaxHighlight(json) {
     });
 }
 
-// ── Category grid (used inside Monthly Summary) ───────────────────────────────
+// ── Category grid ─────────────────────────────────────────────────────────────
 function renderSummaryCategoryGrid(data) {
   const grid = document.getElementById("summaryCatGrid");
   if (!data || !data.categories) {
-    grid.innerHTML = '<p style="color:#aaa;font-size:.82rem;">No category data available.</p>';
+    grid.innerHTML = '<p style="color:var(--text-dim);font-size:13px;">No category data available.</p>';
     return;
   }
 
@@ -915,7 +1358,7 @@ function renderSummaryCategoryGrid(data) {
       return `
         <div class="cat-txn-row">
           <span class="cat-txn-date">${esc(txn.date)}</span>
-          <span class="cat-txn-desc">${esc(txn.description) || "<em style='color:#bbb'>—</em>"}</span>
+          <span class="cat-txn-desc">${esc(txn.description) || "<em style='color:var(--text-muted)'>—</em>"}</span>
           <span class="cat-txn-amounts">
             ${grossHtml}
             <span class="cat-txn-net">&euro;${txn.net_amount.toFixed(2)}</span>
@@ -941,7 +1384,7 @@ function renderSummaryCategoryGrid(data) {
   });
 
   if (!data.categories.length) {
-    grid.innerHTML = '<p style="color:#aaa;font-size:.82rem;">No categorised expenses this month.</p>';
+    grid.innerHTML = '<p style="color:var(--text-dim);font-size:13px;">No categorised expenses this month.</p>';
   }
 }
 
@@ -1090,7 +1533,7 @@ function renderSummary(data) {
 
   const expBody = document.getElementById("summaryExpBody");
   if (!data.expenses.length) {
-    expBody.innerHTML = '<tr><td colspan="5" style="color:#888;text-align:center;padding:1rem;">No expenses this month.</td></tr>';
+    expBody.innerHTML = '<tr><td colspan="5" style="color:var(--text-dim);text-align:center;padding:1.25rem;">No expenses this month.</td></tr>';
   } else {
     expBody.innerHTML = data.expenses.map(e => {
       const reimbs = e.reimbursements || [];
@@ -1100,15 +1543,15 @@ function renderSummary(data) {
       ).join("");
       const netClass = hasReimbursements ? "net-cost-cell" : "net-cost-cell full";
       const badge = e.is_footnote_only
-        ? `<span style="margin-left:6px;font-size:11px;background:#e8f4fd;color:#1976d2;border-radius:4px;padding:2px 6px;vertical-align:middle;">receipt</span>`
+        ? `<span style="margin-left:6px;font-size:11px;background:rgba(61,169,255,.15);color:#7ec8ff;border-radius:6px;padding:2px 8px;vertical-align:middle;font-weight:700;">receipt</span>`
         : '';
       return `
         <tr class="summary-expense-row">
-          <td>${esc(e.date)}</td>
-          <td>${esc(e.description) || "<em style='color:#999'>—</em>"}${badge}</td>
-          <td>&euro;${(e.gross_amount || 0).toFixed(2)}</td>
-          <td><div class="reimbursement-chips">${chips || "<span style='color:#ccc'>—</span>"}</div></td>
-          <td class="${netClass}">&euro;${(e.net_personal_amount || 0).toFixed(2)}</td>
+          <td style="white-space:nowrap">${esc(e.date)}</td>
+          <td>${esc(e.description) || "<em style='color:var(--text-muted)'>—</em>"}${badge}</td>
+          <td style="white-space:nowrap">&euro;${(e.gross_amount || 0).toFixed(2)}</td>
+          <td><div class="reimbursement-chips">${chips || "<span style='color:var(--text-muted)'>—</span>"}</div></td>
+          <td class="${netClass}" style="white-space:nowrap">&euro;${(e.net_personal_amount || 0).toFixed(2)}</td>
         </tr>`;
     }).join("");
   }
@@ -1117,7 +1560,7 @@ function renderSummary(data) {
   const incBody = document.getElementById("summaryIncBody");
   if (data.income.length) {
     incBody.innerHTML = data.income.map(i =>
-      `<tr><td>${esc(i.date)}</td><td>${esc(i.description)}</td><td>&euro;${i.amount.toFixed(2)}</td></tr>`
+      `<tr><td style="white-space:nowrap">${esc(i.date)}</td><td>${esc(i.description)}</td><td style="white-space:nowrap">&euro;${i.amount.toFixed(2)}</td></tr>`
     ).join("");
     incSection.classList.remove("hidden");
   } else {
