@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s \"https://doc.bunq.com/\")",
+      "WebFetch(domain:doc.bunq.com)",
+      "WebSearch",
+      "WebFetch(domain:together.bunq.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:help.bunq.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:www.tapix.io)",
+      "WebFetch(domain:apis.io)",
+      "WebFetch(domain:rapidapi.com)",
+      "WebFetch(domain:mockoon.com)",
+      "WebFetch(domain:www.postman.com)",
+      "WebFetch(domain:beta.doc.bunq.com)"
+    ]
+  }
+}

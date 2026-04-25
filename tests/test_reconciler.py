@@ -130,3 +130,25 @@ def test_amount_tolerance():
     txns = [{"id": 9, "value": 13.32, "description": "Payment", "created": ""}]
     match = _find_match("Nobody", 13.31, txns, set())
     assert match is not None  # within 0.02 tolerance
+
+
+def test_split_txn_description_matched_by_name():
+    """SPLIT|TXN{id}|{name}|{amount} format is matched by the name-based search."""
+    txns = [{"id": 11, "value": 13.31, "description": "SPLIT|TXN100|Sarah|13.31", "created": ""}]
+    match = _find_match("Sarah", 13.31, txns, set())
+    assert match is not None
+    assert match["id"] == 11
+
+
+def test_split_txn_description_all_paid(split):
+    """Reconciler correctly matches SPLIT|TXN formatted Tikkie descriptions."""
+    client = _mock_client(
+        _txn(1, 13.31, "SPLIT|TXN999|Sarah|13.31"),
+        _txn(2, 22.39, "SPLIT|TXN999|Tom|22.39"),
+    )
+    result = reconcile(client, 99, split)
+    sarah = next(p for p in result["payments"] if p["name"] == "Sarah")
+    tom   = next(p for p in result["payments"] if p["name"] == "Tom")
+    assert sarah["paid"] is True
+    assert tom["paid"] is True
+    assert result["total_repaid"] == pytest.approx(35.70, abs=0.01)

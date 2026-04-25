@@ -35,6 +35,7 @@ def reset_state():
         "split_dict": None,
         "bunq_client": None,
         "account_id": None,
+        "expense_transaction_id": None,
     })
     yield
 
@@ -394,3 +395,300 @@ def test_full_cycle_split_then_reconcile(client):
     data = rec_resp.get_json()
     assert data["original_total"] == pytest.approx(30.0)
     assert data["total_repaid"] == 0.0
+
+
+# ── GET /api/recent-expenses ──────────────────────────────────────────────────
+
+def test_recent_expenses_returns_200(client):
+    mock_bunq_c = _mock_bunq_client()
+    mock_bunq_c.get.return_value = []
+    app_module._state["bunq_client"] = mock_bunq_c
+    app_module._state["account_id"] = 99
+
+    resp = client.get("/api/recent-expenses")
+    assert resp.status_code == 200
+    assert isinstance(resp.get_json(), list)
+
+
+def test_recent_expenses_filters_outgoing_only(client):
+    mock_bunq_c = _mock_bunq_client()
+    mock_bunq_c.get.return_value = [
+        {"Payment": {"id": 1, "amount": {"value": "-50.00"}, "description": "Restaurant",
+                     "created": "2026-04-15 12:00:00", "counterparty_alias": {"display_name": "Bistro"}}},
+        {"Payment": {"id": 2, "amount": {"value": "13.31"}, "description": "Tikkie Sarah",
+                     "created": "2026-04-15 12:00:00", "counterparty_alias": {"display_name": "Sarah"}}},
+        {"Payment": {"id": 3, "amount": {"value": "-25.00"}, "description": "Supermarket",
+                     "created": "2026-04-14 10:00:00", "counterparty_alias": {"display_name": "AH"}}},
+    ]
+    app_module._state["bunq_client"] = mock_bunq_c
+    app_module._state["account_id"] = 99
+
+    resp = client.get("/api/recent-expenses")
+    data = resp.get_json()
+
+    assert len(data) == 2
+    ids = [e["id"] for e in data]
+    assert 1 in ids
+    assert 3 in ids
+    assert 2 not in ids   # incoming payment must be excluded
+
+
+def test_recent_expenses_amount_is_positive(client):
+    """Returned amounts are absolute values (positive), not negative."""
+    mock_bunq_c = _mock_bunq_client()
+    mock_bunq_c.get.return_value = [
+        {"Payment": {"id": 1, "amount": {"value": "-57.48"}, "description": "Dinner",
+                     "created": "2026-04-15 12:00:00", "counterparty_alias": {"display_name": "Restaurant"}}},
+    ]
+    app_module._state["bunq_client"] = mock_bunq_c
+    app_module._state["account_id"] = 99
+
+    resp = client.get("/api/recent-expenses")
+    data = resp.get_json()
+    assert data[0]["amount"] == pytest.approx(57.48)
+
+
+def test_recent_expenses_max_ten_results(client):
+    """At most 10 outgoing payments are returned."""
+    mock_bunq_c = _mock_bunq_client()
+    mock_bunq_c.get.return_value = [
+        {"Payment": {"id": i, "amount": {"value": "-10.00"}, "description": f"Expense {i}",
+                     "created": "2026-04-15 12:00:00", "counterparty_alias": {"display_name": "Vendor"}}}
+        for i in range(1, 20)
+    ]
+    app_module._state["bunq_client"] = mock_bunq_c
+    app_module._state["account_id"] = 99
+
+    resp = client.get("/api/recent-expenses")
+    assert len(resp.get_json()) == 10
+
+
+def test_recent_expenses_response_has_required_fields(client):
+    mock_bunq_c = _mock_bunq_client()
+    mock_bunq_c.get.return_value = [
+        {"Payment": {"id": 1, "amount": {"value": "-30.00"}, "description": "Lunch",
+                     "created": "2026-04-15 12:00:00", "counterparty_alias": {"display_name": "Café"}}},
+    ]
+    app_module._state["bunq_client"] = mock_bunq_c
+    app_module._state["account_id"] = 99
+
+    resp = client.get("/api/recent-expenses")
+    entry = resp.get_json()[0]
+    assert {"id", "amount", "description", "date", "counterparty"}.issubset(entry.keys())
+
+
+def test_recent_expenses_bunq_error_returns_500(client):
+    mock_bunq_c = _mock_bunq_client()
+    mock_bunq_c.get.side_effect = RuntimeError("bunq down")
+    app_module._state["bunq_client"] = mock_bunq_c
+    app_module._state["account_id"] = 99
+
+    resp = client.get("/api/recent-expenses")
+    assert resp.status_code == 500
+    assert "error" in resp.get_json()
+
+
+# ── GET /api/summary ──────────────────────────────────────────────────────────
+
+def _make_summary_result(period: str = "2026-04") -> dict:
+    return {
+        "period": period,
+        "expenses": [],
+        "income": [],
+        "unmatched_tikkies": [],
+        "totals": {
+            "gross_expenses": 0.0,
+            "tikkie_reimbursements_received": 0.0,
+            "net_personal_expenses": 0.0,
+            "other_income": 0.0,
+        },
+    }
+
+
+def test_summary_returns_200(client):
+    mock_bunq_c = _mock_bunq_client()
+    app_module._state["bunq_client"] = mock_bunq_c
+    app_module._state["account_id"] = 99
+
+    with patch("app.summarize_month", return_value=_make_summary_result("2026-04")):
+        resp = client.get("/api/summary?month=2026-04")
+
+    assert resp.status_code == 200
+
+
+def test_summary_returns_correct_period(client):
+    mock_bunq_c = _mock_bunq_client()
+    app_module._state["bunq_client"] = mock_bunq_c
+    app_module._state["account_id"] = 99
+
+    with patch("app.summarize_month", return_value=_make_summary_result("2026-03")):
+        resp = client.get("/api/summary?month=2026-03")
+
+    assert resp.get_json()["period"] == "2026-03"
+
+
+def test_summary_response_has_required_keys(client):
+    mock_bunq_c = _mock_bunq_client()
+    app_module._state["bunq_client"] = mock_bunq_c
+    app_module._state["account_id"] = 99
+
+    with patch("app.summarize_month", return_value=_make_summary_result()):
+        resp = client.get("/api/summary?month=2026-04")
+
+    data = resp.get_json()
+    required = {"period", "expenses", "income", "unmatched_tikkies", "totals"}
+    assert required.issubset(data.keys())
+    assert {"gross_expenses", "tikkie_reimbursements_received",
+            "net_personal_expenses", "other_income"}.issubset(data["totals"].keys())
+
+
+def test_summary_with_invalid_month_defaults_to_current(client):
+    """Invalid month string → falls back to current month without raising."""
+    mock_bunq_c = _mock_bunq_client()
+    app_module._state["bunq_client"] = mock_bunq_c
+    app_module._state["account_id"] = 99
+
+    with patch("app.summarize_month", return_value=_make_summary_result()) as mock_sum:
+        resp = client.get("/api/summary?month=not-a-date")
+
+    assert resp.status_code == 200
+    mock_sum.assert_called_once()
+
+
+def test_summary_without_month_param_uses_current(client):
+    mock_bunq_c = _mock_bunq_client()
+    app_module._state["bunq_client"] = mock_bunq_c
+    app_module._state["account_id"] = 99
+
+    with patch("app.summarize_month", return_value=_make_summary_result()) as mock_sum:
+        resp = client.get("/api/summary")
+
+    assert resp.status_code == 200
+    mock_sum.assert_called_once()
+
+
+def test_summary_bunq_error_returns_500(client):
+    mock_bunq_c = _mock_bunq_client()
+    mock_bunq_c.get.side_effect = RuntimeError("bunq error")
+    app_module._state["bunq_client"] = mock_bunq_c
+    app_module._state["account_id"] = 99
+
+    with patch("app.summarize_month", side_effect=RuntimeError("bunq error")):
+        resp = client.get("/api/summary?month=2026-04")
+
+    assert resp.status_code == 500
+    assert "error" in resp.get_json()
+
+
+def test_summary_month_boundary_13_is_invalid(client):
+    """Month=13 is invalid and must fall back to current month."""
+    mock_bunq_c = _mock_bunq_client()
+    app_module._state["bunq_client"] = mock_bunq_c
+    app_module._state["account_id"] = 99
+
+    with patch("app.summarize_month", return_value=_make_summary_result()) as mock_sum:
+        resp = client.get("/api/summary?month=2026-13")
+
+    assert resp.status_code == 200
+    mock_sum.assert_called_once()
+
+
+# ── POST /api/simulate expense_transaction_id state ──────────────────────────
+
+def test_simulate_with_expense_id_in_state_uses_split_format(client):
+    """When expense_transaction_id is set in state, description uses SPLIT|TXN format."""
+    mock_bunq_c = _mock_bunq_client()
+    mock_bunq_c.post.return_value = [{"Id": {"id": 1}}]
+    app_module._state["bunq_client"] = mock_bunq_c
+    app_module._state["account_id"] = 99
+    app_module._state["expense_transaction_id"] = 200
+
+    with patch("app.time.sleep"):
+        client.post("/api/simulate", json={"person": "Sarah", "amount": 13.31})
+
+    call_body = mock_bunq_c.post.call_args[0][1]
+    assert call_body["description"] == "SPLIT|TXN200|Sarah|13.31"
+
+
+def test_simulate_without_expense_id_uses_plain_format(client):
+    """No expense_transaction_id → description is plain 'Tikkie repayment — name'."""
+    mock_bunq_c = _mock_bunq_client()
+    mock_bunq_c.post.return_value = [{"Id": {"id": 1}}]
+    app_module._state["bunq_client"] = mock_bunq_c
+    app_module._state["account_id"] = 99
+    # expense_transaction_id is None (reset by fixture)
+
+    with patch("app.time.sleep"):
+        client.post("/api/simulate", json={"person": "Tom", "amount": 22.39})
+
+    call_body = mock_bunq_c.post.call_args[0][1]
+    assert call_body["description"] == "Tikkie repayment — Tom"
+
+
+def test_simulate_linked_expense_id_returned_in_response(client):
+    mock_bunq_c = _mock_bunq_client()
+    mock_bunq_c.post.return_value = [{"Id": {"id": 1}}]
+    app_module._state["bunq_client"] = mock_bunq_c
+    app_module._state["account_id"] = 99
+    app_module._state["expense_transaction_id"] = 99
+
+    with patch("app.time.sleep"):
+        resp = client.post("/api/simulate", json={"person": "Alice", "amount": 10.0})
+
+    assert resp.get_json()["linked_expense_id"] == 99
+
+
+def test_simulate_no_expense_id_linked_expense_id_is_none(client):
+    mock_bunq_c = _mock_bunq_client()
+    mock_bunq_c.post.return_value = [{"Id": {"id": 1}}]
+    app_module._state["bunq_client"] = mock_bunq_c
+    app_module._state["account_id"] = 99
+
+    with patch("app.time.sleep"):
+        resp = client.post("/api/simulate", json={"person": "Bob", "amount": 5.0})
+
+    assert resp.get_json()["linked_expense_id"] is None
+
+
+# ── POST /api/split expense_transaction_id wiring ────────────────────────────
+
+def test_split_with_expense_transaction_id_stores_in_state(client):
+    mock_split = {
+        "people": [{"name": "You", "items": [], "subtotal": 10.0,
+                    "tax_share": 0.0, "tip_share": 0.0, "total_owed": 10.0}],
+        "unassigned": [], "total": 10.0, "tax": 0.0, "tip": 0.0,
+    }
+    msg = MagicMock()
+    msg.content = [MagicMock(text=json.dumps(mock_split))]
+    mock_claude = MagicMock()
+    mock_claude.messages.create.return_value = msg
+
+    with patch("matcher.anthropic.Anthropic", return_value=mock_claude):
+        client.post("/api/split", json={
+            "ocr_text": "Food 10.00",
+            "transcript": "I had everything.",
+            "expense_transaction_id": 555,
+        })
+
+    assert app_module._state["expense_transaction_id"] == 555
+
+
+def test_split_with_expense_transaction_id_included_in_response(client):
+    mock_split = {
+        "people": [{"name": "You", "items": [], "subtotal": 10.0,
+                    "tax_share": 0.0, "tip_share": 0.0, "total_owed": 10.0}],
+        "unassigned": [], "total": 10.0, "tax": 0.0, "tip": 0.0,
+    }
+    msg = MagicMock()
+    msg.content = [MagicMock(text=json.dumps(mock_split))]
+    mock_claude = MagicMock()
+    mock_claude.messages.create.return_value = msg
+
+    with patch("matcher.anthropic.Anthropic", return_value=mock_claude):
+        resp = client.post("/api/split", json={
+            "ocr_text": "Food 10.00",
+            "transcript": "I had everything.",
+            "expense_transaction_id": 777,
+        })
+
+    assert resp.get_json().get("expense_transaction_id") == 777

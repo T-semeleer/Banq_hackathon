@@ -147,3 +147,51 @@ def test_simulate_all_skips_zero_amount():
     ]
     assert len(people_to_sim) == 1
     assert people_to_sim[0][0] == "Tom"
+
+
+# ── expense_transaction_id (netting) code path ───────────────────────────────
+
+def test_simulate_payment_with_expense_id_uses_split_format():
+    result = sim.simulate_payment(_mock_client(), 99, "Sarah", 13.31, expense_transaction_id=100)
+    assert result["description"] == "SPLIT|TXN100|Sarah|13.31"
+
+
+def test_simulate_payment_with_expense_id_parseable_by_summarizer():
+    """Description produced by simulate_payment must be parseable by the summarizer."""
+    sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+    from summarizer import _parse_split_ref  # noqa: E402
+    result = sim.simulate_payment(_mock_client(), 99, "Sarah", 13.31, expense_transaction_id=100)
+    parsed = _parse_split_ref(result["description"])
+    assert parsed == (100, "Sarah", 13.31)
+
+
+def test_simulate_payment_linked_expense_id_populated():
+    result = sim.simulate_payment(_mock_client(), 99, "Tom", 22.39, expense_transaction_id=42)
+    assert result["linked_expense_id"] == 42
+
+
+def test_simulate_payment_no_expense_id_linked_expense_id_is_none():
+    result = sim.simulate_payment(_mock_client(), 99, "Sarah", 13.31)
+    assert result["linked_expense_id"] is None
+
+
+def test_simulate_payment_expense_id_embeds_correct_amount():
+    client = _mock_client()
+    sim.simulate_payment(client, 99, "Alice", 9.9, expense_transaction_id=5)
+    body = client.post.call_args[0][1]
+    # Amount in description must be 2dp and match the SPLIT format
+    assert "9.90" in body["description"]
+    assert "SPLIT|TXN5|Alice|9.90" == body["description"]
+
+
+def test_simulate_payment_expense_id_posts_same_endpoint():
+    client = _mock_client()
+    sim.simulate_payment(client, 99, "Eve", 10.0, expense_transaction_id=7)
+    endpoint = client.post.call_args[0][0]
+    assert "request-inquiry" in endpoint
+
+
+def test_simulate_payment_expense_id_zero_treated_as_falsy_no_split_format():
+    """expense_transaction_id=0 is falsy — description falls back to plain Tikkie format."""
+    result = sim.simulate_payment(_mock_client(), 99, "Bob", 5.0, expense_transaction_id=0)
+    assert result["description"] == "Tikkie repayment — Bob"

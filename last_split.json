@@ -3,16 +3,6 @@
     {
       "name": "You",
       "items": [],
-      "subtotal": 20.0,
-      "tax_share": 0.0,
-      "tip_share": 0.0,
-      "total_owed": 20.0,
-      "bunqme_url": null,
-      "payment_status": "pending"
-    },
-    {
-      "name": "Sarah",
-      "items": [],
       "subtotal": 10.0,
       "tax_share": 0.0,
       "tip_share": 0.0,
@@ -22,8 +12,9 @@
     }
   ],
   "unassigned": [],
-  "total": 30.0,
+  "total": 10.0,
   "tax": 0.0,
   "tip": 0.0,
-  "status": "review"
+  "status": "review",
+  "expense_transaction_id": 777
 }
