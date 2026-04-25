@@ -32,7 +32,7 @@ for _p in (str(_ROOT / "src"), str(_TOOLKIT_DIR)):
 from flask import Flask, jsonify, render_template, request  # noqa: E402
 
 from bunq_client import BunqClient  # noqa: E402
-from matcher import match as do_split, result_to_dict  # noqa: E402
+from matcher import match as do_split, result_to_dict, categorize_from_items  # noqa: E402
 from reconciler import reconcile  # noqa: E402
 from bunq import create_payment_links, inject_links  # noqa: E402
 from summarizer import summarize_month  # noqa: E402
@@ -56,6 +56,9 @@ _state: dict = {
     "bunq_client": None,
     "account_id": None,
     "expense_transaction_id": None,  # original outgoing payment that was split
+    "split_at": None,                # UTC timestamp of the most recent split
+    "split_category": None,          # bunq category detected by Claude for this split
+    "split_description": None,       # vendor / first line of OCR for display in summary
     "demo_expenses": None,           # populated by POST /api/demo/setup
     "footnotes": [],                 # accumulated reconcile results across all splits
 }
@@ -181,10 +184,17 @@ def split():
         return jsonify({"error": "Both ocr_text and transcript are required"}), 400
 
     try:
+        from datetime import datetime, timezone
         result = do_split(ocr_text, transcript)
         split_dict = result_to_dict(result)
         _state["split_result"] = result
         _state["split_dict"] = split_dict
+        _state["split_category"] = result.category
+        # First non-empty line of OCR is usually the vendor/establishment name
+        vendor = next((ln.strip() for ln in ocr_text.splitlines() if ln.strip()), "")
+        _state["split_description"] = vendor[:50] if vendor else None
+        # Store in bunq's timestamp format ("2026-04-25 16:00:00.000000") for direct string comparison
+        _state["split_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
         if expense_txn_id is not None:
             _state["expense_transaction_id"] = int(expense_txn_id)
             split_dict["expense_transaction_id"] = int(expense_txn_id)
@@ -237,11 +247,27 @@ def reconcile_status():
         return jsonify({"error": "No split result — run /api/split first"}), 400
     try:
         client, account_id = _get_bunq()
-        status = reconcile(client, account_id, _state["split_result"])
+        status = reconcile(client, account_id, _state["split_result"], _state.get("split_at"))
         # Persist this reconcile result to disk (upsert by expense_transaction_id)
         exp_id = _state.get("expense_transaction_id")
         original_total = status.get("original_total")
-        footnote = {**status, "expense_transaction_id": exp_id}
+        # Resolve category: use stored state, fall back to keyword match on split items
+        category = _state.get("split_category")
+        if not category and _state.get("split_result"):
+            all_items = [i.name for p in _state["split_result"].people for i in p.items]
+            all_items += [i.name for i in _state["split_result"].unassigned]
+            category = categorize_from_items(all_items)
+        if not category:
+            # Last resort: try reading from last_split.json
+            try:
+                last = json.loads((_ROOT / "last_split.json").read_text())
+                all_names = [i["name"] for p in last.get("people", []) for i in p.get("items", [])]
+                category = categorize_from_items(all_names) if all_names else "FOOD_AND_DRINK"
+            except Exception:
+                category = "FOOD_AND_DRINK"
+        _state["split_category"] = category
+        description = _state.get("split_description") or category.replace("_", " ").title()
+        footnote = {**status, "expense_transaction_id": exp_id, "category": category, "description": description}
         footnotes = _load_footnotes()
         # Upsert: match by expense_transaction_id when set, else by original_total
         if exp_id is not None:

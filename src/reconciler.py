@@ -19,9 +19,17 @@ _AMOUNT_TOL = 0.02
 _SELF_NAMES = {"you", "me", "i"}
 
 
-def reconcile(client: BunqClient, account_id: int, split_result: SplitResult) -> dict:
+def reconcile(
+    client: BunqClient,
+    account_id: int,
+    split_result: SplitResult,
+    split_at: str | None = None,
+) -> dict:
     """
     Compare incoming bunq transactions against the split result.
+
+    Only considers transactions created after `split_at` (ISO timestamp) to
+    prevent old Tikkie payments from prior sessions matching current splits.
 
     Returns:
         {
@@ -44,12 +52,16 @@ def reconcile(client: BunqClient, account_id: int, split_result: SplitResult) ->
     for item in raw:
         p = item.get("Payment", {})
         value = float(p.get("amount", {}).get("value", "0"))
+        created = p.get("created", "")
         if value > 0:
+            # Skip transactions that predate the current split
+            if split_at and created and created < split_at:
+                continue
             incoming.append({
                 "id": p.get("id"),
                 "value": value,
                 "description": p.get("description", ""),
-                "created": p.get("created", ""),
+                "created": created,
             })
 
     used_ids: set = set()

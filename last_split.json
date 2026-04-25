@@ -106,5 +106,6 @@
   "total": 27.35,
   "tax": 0.0,
   "tip": 0.0,
+  "category": "GROCERIES",
   "status": "review"
 }

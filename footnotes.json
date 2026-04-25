@@ -6,45 +6,23 @@
         "name": "Terence",
         "amount_owed": 12.7,
         "paid": true,
-        "paid_at": "2026-04-25 15:45:05.307618",
-        "transaction_id": 32033856
+        "paid_at": "2026-04-25 16:27:19.007728",
+        "transaction_id": 32033886
       },
       {
         "name": "Noah",
         "amount_owed": 8.3,
         "paid": true,
-        "paid_at": "2026-04-25 15:40:14.904643",
-        "transaction_id": 32033850
+        "paid_at": "2026-04-25 16:27:27.205863",
+        "transaction_id": 32033888
       }
     ],
     "total_repaid": 21.0,
     "net_cost": 6.35,
     "remaining_owed": 0,
     "summary_line": "All repaid. You paid \u20ac27.35 total and received \u20ac21.00 back \u2014 your actual share was \u20ac6.35.",
-    "expense_transaction_id": null
-  },
-  {
-    "original_total": 25.85,
-    "payments": [
-      {
-        "name": "John",
-        "amount_owed": 8.2,
-        "paid": true,
-        "paid_at": "2026-04-25 15:40:07.793284",
-        "transaction_id": 32033848
-      },
-      {
-        "name": "Thomas",
-        "amount_owed": 8.3,
-        "paid": true,
-        "paid_at": "2026-04-25 15:40:14.904643",
-        "transaction_id": 32033850
-      }
-    ],
-    "total_repaid": 16.5,
-    "net_cost": 9.35,
-    "remaining_owed": 0,
-    "summary_line": "All repaid. You paid \u20ac25.85 total and received \u20ac16.50 back \u2014 your actual share was \u20ac9.35.",
-    "expense_transaction_id": null
+    "expense_transaction_id": null,
+    "category": "GROCERIES",
+    "description": "Green"
   }
 ]

@@ -813,8 +813,6 @@
     <div class="step-body">
       <div class="btn-row" style="margin-top:0">
         <button class="btn btn-primary" id="btnSplit" onclick="doSplit()">Split Bill</button>
-        <button class="btn btn-secondary" id="btnLinks" disabled onclick="doLinks()">Create Payment Links</button>
-        <button class="btn btn-secondary" id="btnRefresh" disabled onclick="doReconcile()">&#8635; Refresh Status</button>
       </div>
 
       <!-- Expense linking -->
@@ -843,6 +841,10 @@
     </div>
     <div class="step-body">
       <div class="summary-row" id="summaryRow"></div>
+      <div class="btn-row" style="margin-top:14px;">
+        <button class="btn btn-primary btn-sm" id="btnLinksResults" onclick="doLinks()">🔗 Create Payment Links</button>
+        <button class="btn btn-secondary btn-sm" id="btnRefreshResults" onclick="doReconcile()">&#8635; Refresh Status</button>
+      </div>
       <div class="table-wrap">
         <table id="resultsTable">
           <thead>
@@ -1223,10 +1225,8 @@ async function doSplit() {
     const data = await res.json();
     if (data.error) { showError("splitError", data.error); return; }
     splitData = data;
+    reconcileData = null;
     renderResults(data, null);
-    document.getElementById("btnLinks").disabled = false;
-    document.getElementById("btnRefresh").disabled = false;
-    doReconcile();
   } catch (err) {
     showError("splitError", "Error: " + err.message);
   } finally {
@@ -1238,9 +1238,8 @@ async function doSplit() {
 // ── Links ─────────────────────────────────────────────────────────────────────
 async function doLinks() {
   clearError("splitError");
-  const btn = document.getElementById("btnLinks");
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Creating…';
+  const btn = document.getElementById("btnLinksResults");
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Creating…'; }
   try {
     const res = await fetch("/api/links", { method: "POST" });
     const data = await res.json();
@@ -1249,8 +1248,7 @@ async function doLinks() {
   } catch (err) {
     showError("splitError", "Error: " + err.message);
   } finally {
-    btn.disabled = false;
-    btn.textContent = "Create Payment Links";
+    if (btn) { btn.disabled = false; btn.textContent = "🔗 Create Payment Links"; }
   }
 }
 
@@ -1316,11 +1314,20 @@ function renderResults(split, reconcile) {
   const netCost = reconcile ? reconcile.net_cost : total;
   const remaining = reconcile ? reconcile.remaining_owed : null;
 
+  const catKey = split.category || 'FOOD_AND_DRINK';
+  const catMeta = CAT_META[catKey] || { label: "Other", color: "#9e9e9e" };
   document.getElementById("summaryRow").innerHTML = `
     <div class="summary-box"><div class="label">You paid</div><div class="value">&euro;${total.toFixed(2)}</div></div>
     <div class="summary-box"><div class="label">Received back</div><div class="value">&euro;${repaid.toFixed(2)}</div></div>
     <div class="summary-box highlight"><div class="label">Net cost</div><div class="value">&euro;${netCost.toFixed(2)}</div></div>
     ${remaining !== null ? `<div class="summary-box"><div class="label">Still owed</div><div class="value">&euro;${remaining.toFixed(2)}</div></div>` : ""}
+    <div class="summary-box" style="border-color:${catMeta.color}22">
+      <div class="label">Category</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px;">
+        <span style="width:10px;height:10px;border-radius:50%;background:${catMeta.color};flex-shrink:0;display:inline-block;"></span>
+        <span style="font-size:13px;font-weight:800;color:${catMeta.color}">${catMeta.label}</span>
+      </div>
+    </div>
   `;
 
   // Build payment status lookup
@@ -1348,7 +1355,7 @@ function renderResults(split, reconcile) {
 
     const itemsList = (person.items || []).map(i => `${i.name} €${Number(i.price).toFixed(2)}`).join(", ") || "—";
     const url = person.bunqme_url;
-    const linkHtml = url ? `<a class="link-btn" href="${url}" target="_blank">🔗 Pay link</a>` : "—";
+    const linkHtml = (!isSelf && url) ? `<a class="link-btn" href="${url}" target="_blank">🔗 Pay link</a>` : "—";
 
     const simHtml = (!isSelf && !(rec && rec.paid))
       ? `<button class="btn btn-sim" onclick="simulateTikkie('${person.name}', ${person.total_owed}, this)">▶ Simulate</button>`
@@ -1393,10 +1400,47 @@ function syntaxHighlight(json) {
 }
 
 // ── Category grid ─────────────────────────────────────────────────────────────
+function buildCategoryData(enriched, insightsData) {
+  // Start from real bunq category data (may be null/empty)
+  const catMap = {};
+  if (insightsData && insightsData.categories) {
+    insightsData.categories.forEach(c => { catMap[c.key || c.label] = { ...c, transactions: [...c.transactions] }; });
+  }
+
+  // Merge every enriched expense that has a category field (filler + footnote virtual rows)
+  enriched.expenses.forEach(e => {
+    if (!e.category) return;
+    const meta = CAT_META[e.category] || { label: "Other", color: "#9e9e9e" };
+    if (!catMap[e.category]) {
+      catMap[e.category] = {
+        key: e.category,
+        label: meta.label,
+        color: meta.color,
+        total_amount: 0,
+        transaction_count: 0,
+        transactions: [],
+      };
+    }
+    const entry = catMap[e.category];
+    entry.total_amount = round2(entry.total_amount + (e.net_personal_amount || e.gross_amount || 0));
+    entry.transaction_count += 1;
+    entry.transactions.push({
+      date: e.date || '',
+      description: e.description || '',
+      gross_amount: e.gross_amount || 0,
+      net_amount: e.net_personal_amount || e.gross_amount || 0,
+      has_footnote: e.is_footnote_only || false,
+    });
+  });
+
+  const categories = Object.values(catMap).sort((a, b) => b.total_amount - a.total_amount);
+  return categories.length ? { categories } : null;
+}
+
 function renderSummaryCategoryGrid(data) {
   const grid = document.getElementById("summaryCatGrid");
-  if (!data || !data.categories) {
-    grid.innerHTML = '<p style="color:var(--text-dim);font-size:13px;">No category data available.</p>';
+  if (!data || !data.categories || !data.categories.length) {
+    grid.innerHTML = '<p style="color:var(--text-dim);font-size:13px;">No categorised expenses this month.</p>';
     return;
   }
 
@@ -1441,9 +1485,6 @@ function renderSummaryCategoryGrid(data) {
     grid.appendChild(row);
   });
 
-  if (!data.categories.length) {
-    grid.innerHTML = '<p style="color:var(--text-dim);font-size:13px;">No categorised expenses this month.</p>';
-  }
 }
 
 // ── Utility ───────────────────────────────────────────────────────────────────
@@ -1481,7 +1522,7 @@ async function loadSummary() {
     if (summaryData.error) { alert("Summary error: " + summaryData.error); return; }
     const enriched = applyFootnotes(summaryData, footnotesData.footnotes || []);
     renderSummary(enriched);
-    renderSummaryCategoryGrid(insightsData.error ? null : insightsData);
+    renderSummaryCategoryGrid(buildCategoryData(enriched, insightsData.error ? null : insightsData));
     document.getElementById("summaryResults").classList.remove("hidden");
   } catch (err) {
     alert("Error: " + err.message);
@@ -1492,21 +1533,24 @@ async function loadSummary() {
 }
 
 // ── Demo filler expenses (shown when bunq has < 5 real transactions) ──────────
+// ── Category metadata ─────────────────────────────────────────────────────────
+const CAT_META = {
+  FOOD_AND_DRINK:      { label: "Food & Drink",     color: "#ff5722" },
+  GROCERIES:           { label: "Groceries",         color: "#4caf50" },
+  TRANSPORT:           { label: "Transport",         color: "#2196f3" },
+  ENTERTAINMENT:       { label: "Entertainment",     color: "#ff9800" },
+  SHOPPING:            { label: "Shopping",          color: "#9c27b0" },
+  HEALTH_AND_BEAUTY:   { label: "Health & Beauty",  color: "#e91e63" },
+  BILLS_AND_UTILITIES: { label: "Bills & Utilities", color: "#607d8b" },
+};
+
 const DEMO_FILLER = [
-  { description: "Albert Heijn Boodschappen", gross_amount: 34.20, date: "2026-04-22" },
-  { description: "NS Trein Amsterdam CS",     gross_amount: 12.60, date: "2026-04-21" },
-  { description: "Pathé City Amsterdam",      gross_amount: 23.50, date: "2026-04-19" },
-  { description: "Etos Drogisterij",          gross_amount: 15.90, date: "2026-04-17" },
-  { description: "Vodafone Abonnement",       gross_amount: 29.99, date: "2026-04-15" },
-  { description: "Jumbo Supermarkt",          gross_amount: 41.75, date: "2026-04-14" },
-  { description: "GVB Maandkaart OV",        gross_amount: 98.00, date: "2026-04-01" },
-  { description: "Café Brouwerij 't IJ",     gross_amount: 18.50, date: "2026-04-11" },
-  { description: "Spotify Premium",           gross_amount: 10.99, date: "2026-04-10" },
-  { description: "H&M Amsterdam",             gross_amount: 54.95, date: "2026-04-08" },
-  { description: "Thuisbezorgd.nl",           gross_amount: 32.80, date: "2026-04-06" },
-  { description: "Eneco Energie",             gross_amount: 87.50, date: "2026-04-03" },
-  { description: "Coolblue",                  gross_amount: 149.00, date: "2026-04-02" },
-  { description: "Bagels & Beans",            gross_amount: 11.40, date: "2026-04-05" },
+  { description: "Albert Heijn Boodschappen", gross_amount: 34.20, date: "2026-04-22", category: "GROCERIES" },
+  { description: "NS Trein Amsterdam CS",     gross_amount: 12.60, date: "2026-04-19", category: "TRANSPORT" },
+  { description: "Vodafone Abonnement",       gross_amount: 29.99, date: "2026-04-15", category: "BILLS_AND_UTILITIES" },
+  { description: "GVB Maandkaart OV",         gross_amount: 98.00, date: "2026-04-01", category: "TRANSPORT" },
+  { description: "Eneco Energie",             gross_amount: 87.50, date: "2026-04-03", category: "BILLS_AND_UTILITIES" },
+  { description: "Pathé City Amsterdam",      gross_amount: 23.50, date: "2026-04-11", category: "ENTERTAINMENT" },
 ];
 
 function applyFootnotes(summaryData, footnotes) {
@@ -1549,13 +1593,14 @@ function applyFootnotes(summaryData, footnotes) {
       const date = firstPaid ? firstPaid.paid_at.slice(0, 10) : (summaryData.expenses[0]?.date || '');
       virtualExpenses.push({
         transaction_id: null,
-        description: 'Receipt (bill split)',
+        description: fn.description || 'Receipt (bill split)',
         gross_amount: fn.original_total || 0,
         net_personal_amount: fn.net_cost || 0,
         reimbursements: (fn.payments || [])
           .filter(p => p.paid)
           .map(p => ({ from: p.name, amount: p.amount_owed })),
         date,
+        category: fn.category || 'FOOD_AND_DRINK',
         is_footnote_only: true,
       });
     }
@@ -1581,6 +1626,7 @@ function applyFootnotes(summaryData, footnotes) {
           net_personal_amount: f.gross_amount,
           reimbursements: [],
           date: f.date,
+          category: f.category || 'FOOD_AND_DRINK',
           is_footnote_only: false,
         }))
     : [];
