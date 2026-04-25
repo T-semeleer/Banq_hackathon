@@ -154,6 +154,42 @@
 
     .hidden { display: none !important; }
 
+    /* Expense picker */
+    .expense-section { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #f0f0f0; }
+    .expense-item {
+      padding: .55rem .75rem; cursor: pointer; border-bottom: 1px solid #f0f0f0;
+      font-size: .85rem; display: flex; justify-content: space-between; align-items: center;
+      transition: background .1s;
+    }
+    .expense-item:last-child { border-bottom: none; }
+    .expense-item:hover { background: #f0fdf4; }
+    .expense-item .exp-desc { color: #333; font-weight: 500; }
+    .expense-item .exp-meta { font-size: .78rem; color: #888; white-space: nowrap; margin-left: .5rem; }
+    .expense-picker-list {
+      border: 1px solid #e5e7eb; border-radius: 8px; max-height: 200px;
+      overflow-y: auto; margin-top: .75rem;
+    }
+    .linked-badge {
+      display: inline-flex; align-items: center; gap: .4rem;
+      background: #d1fae5; color: #065f46; border-radius: 6px;
+      padding: .25rem .65rem; font-size: .78rem; font-weight: 600;
+    }
+    .linked-badge button {
+      border: none; background: none; cursor: pointer; color: #065f46;
+      font-size: 1rem; line-height: 1; padding: 0; margin-left: .15rem;
+    }
+
+    /* Monthly summary */
+    .summary-expense-row td { vertical-align: top; }
+    .reimbursement-chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+    .chip {
+      display: inline-flex; align-items: center; gap: .2rem;
+      background: #dbeafe; color: #1e40af; border-radius: 12px;
+      padding: .15rem .5rem; font-size: .72rem; font-weight: 600;
+    }
+    .net-cost-cell { font-weight: 700; color: #00c389; }
+    .net-cost-cell.full { color: #111; }
+
     .spinner { display: inline-block; width: 14px; height: 14px;
                border: 2px solid #fff; border-top-color: transparent;
                border-radius: 50%; animation: spin .6s linear infinite;
@@ -216,6 +252,22 @@
       <button class="btn btn-secondary" id="btnLinks" disabled onclick="doLinks()">Create Payment Links</button>
       <button class="btn btn-secondary" id="btnRefresh" disabled onclick="doReconcile()">&#8635; Refresh Status</button>
     </div>
+    <!-- Expense transaction linking (optional — enables Tikkie netting in monthly summary) -->
+    <div class="expense-section">
+      <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+        <label style="margin:0;">Link Expense Transaction</label>
+        <button class="btn btn-secondary btn-sm" id="btnLoadExpenses" onclick="loadExpenses()">Pick from Bunq</button>
+        <div id="linkedExpenseBadge" class="linked-badge hidden">
+          <span id="linkedExpenseLabel"></span>
+          <button onclick="clearLinkedExpense()" title="Clear">&#215;</button>
+        </div>
+      </div>
+      <p style="font-size:.78rem;color:#888;margin-top:.35rem;">
+        Select the original payment (e.g. dinner bill) so Tikkie reimbursements
+        are tracked against it in your monthly summary.
+      </p>
+      <div id="expensePickerList" class="expense-picker-list hidden"></div>
+    </div>
     <div class="error-box" id="splitError"></div>
   </div>
 
@@ -252,12 +304,59 @@
     <div class="json-block" id="footnoteJson"></div>
   </div>
 
+  <!-- ── Step 6: Monthly Summary ──────────────────────────────────────────── -->
+  <div class="card" id="monthlySummaryCard">
+    <div class="card-title"><span class="step-badge">6</span> Monthly Summary</div>
+    <p style="font-size:.82rem;color:#666;margin-bottom:.75rem;">
+      Your actual personal expenses after netting out Tikkie reimbursements.
+      Tikkies created through this app are offset against the linked expense —
+      they do not appear as income.
+    </p>
+    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;">
+      <input type="month" id="monthPicker"
+             style="padding:.5rem .75rem;font-size:.85rem;border:1.5px solid #d1d5db;border-radius:8px;color:#111;">
+      <button class="btn btn-primary" id="btnLoadSummary" onclick="loadSummary()">Load Summary</button>
+    </div>
+
+    <div id="summaryResults" class="hidden" style="margin-top:1.25rem;">
+      <div class="summary-row" id="summaryTotals"></div>
+
+      <div style="overflow-x:auto;margin-top:1.25rem;">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Description</th>
+              <th>Gross</th>
+              <th>Reimbursements</th>
+              <th>Your Cost</th>
+            </tr>
+          </thead>
+          <tbody id="summaryExpBody"></tbody>
+        </table>
+      </div>
+
+      <div id="summaryIncomeSection" class="hidden" style="margin-top:1.5rem;">
+        <div style="font-size:.78rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem;">
+          Other Income
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Date</th><th>Description</th><th>Amount</th></tr></thead>
+            <tbody id="summaryIncBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </main>
 
 <script>
 // ── State ─────────────────────────────────────────────────────────────────────
 let splitData = null;
 let reconcileData = null;
+let linkedExpenseId = null;
 
 // ── Recording ─────────────────────────────────────────────────────────────────
 let mediaRecorder = null, chunks = [], timerInterval = null, seconds = 0, audioBlob = null;
@@ -366,6 +465,54 @@ async function runOcr() {
   }
 }
 
+// ── Expense transaction picker ────────────────────────────────────────────────
+async function loadExpenses() {
+  const btn = document.getElementById("btnLoadExpenses");
+  const list = document.getElementById("expensePickerList");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Loading…';
+  list.classList.remove("hidden");
+  list.innerHTML = '<div style="padding:.75rem;color:#888;font-size:.85rem;">Fetching transactions…</div>';
+  try {
+    const res = await fetch("/api/recent-expenses");
+    const data = await res.json();
+    if (data.error) { list.innerHTML = `<div style="padding:.75rem;color:#b91c1c">${esc(data.error)}</div>`; return; }
+    if (!data.length) { list.innerHTML = '<div style="padding:.75rem;color:#888;font-size:.85rem;">No recent outgoing transactions found.</div>'; return; }
+    list.innerHTML = data.map(e => `
+      <div class="expense-item"
+           data-id="${e.id}"
+           data-amount="${e.amount}"
+           data-date="${esc(e.date)}"
+           data-desc="${esc(e.description || e.counterparty || 'Transaction')}">
+        <span class="exp-desc">${esc(e.description || e.counterparty || 'Transaction')}</span>
+        <span class="exp-meta">&euro;${Number(e.amount).toFixed(2)} &middot; ${esc(e.date)}</span>
+      </div>
+    `).join("");
+    list.addEventListener("click", onExpenseItemClick);
+  } catch (err) {
+    list.innerHTML = `<div style="padding:.75rem;color:#b91c1c">${esc(err.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Pick from Bunq";
+  }
+}
+
+function onExpenseItemClick(e) {
+  const item = e.target.closest(".expense-item");
+  if (!item) return;
+  linkedExpenseId = Number(item.dataset.id);
+  const label = `${item.dataset.desc} &euro;${Number(item.dataset.amount).toFixed(2)} (${item.dataset.date})`;
+  document.getElementById("linkedExpenseLabel").innerHTML = label;
+  document.getElementById("linkedExpenseBadge").classList.remove("hidden");
+  document.getElementById("expensePickerList").classList.add("hidden");
+}
+
+function clearLinkedExpense() {
+  linkedExpenseId = null;
+  document.getElementById("linkedExpenseBadge").classList.add("hidden");
+  document.getElementById("linkedExpenseLabel").textContent = "";
+}
+
 // ── Split ─────────────────────────────────────────────────────────────────────
 async function doSplit() {
   clearError("splitError");
@@ -376,10 +523,12 @@ async function doSplit() {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Splitting…';
   try {
+    const body = { ocr_text: ocr, transcript: tr };
+    if (linkedExpenseId) body.expense_transaction_id = linkedExpenseId;
     const res = await fetch("/api/split", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ocr_text: ocr, transcript: tr }),
+      body: JSON.stringify(body),
     });
     const data = await res.json();
     if (data.error) { showError("splitError", data.error); return; }
@@ -533,6 +682,95 @@ function syntaxHighlight(json) {
       if (/null/.test(match))  return `<span class="json-null">${match}</span>`;
       return `<span class="json-num">${match}</span>`;
     });
+}
+
+// ── Utility ───────────────────────────────────────────────────────────────────
+function esc(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// ── Monthly Summary ───────────────────────────────────────────────────────────
+(function initMonthPicker() {
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, "0");
+  document.getElementById("monthPicker").value = `${y}-${m}`;
+})();
+
+async function loadSummary() {
+  const month = document.getElementById("monthPicker").value;
+  if (!month) return;
+  const btn = document.getElementById("btnLoadSummary");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Loading…';
+  try {
+    const res = await fetch(`/api/summary?month=${month}`);
+    const data = await res.json();
+    if (data.error) { alert("Summary error: " + data.error); return; }
+    renderSummary(data);
+    document.getElementById("summaryResults").classList.remove("hidden");
+  } catch (err) {
+    alert("Error: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Load Summary";
+  }
+}
+
+function renderSummary(data) {
+  const t = data.totals;
+  document.getElementById("summaryTotals").innerHTML = `
+    <div class="summary-box">
+      <div class="label">Gross Spent</div>
+      <div class="value">&euro;${t.gross_expenses.toFixed(2)}</div>
+    </div>
+    <div class="summary-box">
+      <div class="label">Tikkies Received</div>
+      <div class="value">&euro;${t.tikkie_reimbursements_received.toFixed(2)}</div>
+    </div>
+    <div class="summary-box highlight">
+      <div class="label">Net Personal Cost</div>
+      <div class="value">&euro;${t.net_personal_expenses.toFixed(2)}</div>
+    </div>
+    <div class="summary-box">
+      <div class="label">Other Income</div>
+      <div class="value">&euro;${t.other_income.toFixed(2)}</div>
+    </div>
+  `;
+
+  const expBody = document.getElementById("summaryExpBody");
+  if (!data.expenses.length) {
+    expBody.innerHTML = '<tr><td colspan="5" style="color:#888;text-align:center;padding:1rem;">No expenses this month.</td></tr>';
+  } else {
+    expBody.innerHTML = data.expenses.map(e => {
+      const hasReimbursements = e.reimbursements.length > 0;
+      const chips = e.reimbursements.map(r =>
+        `<span class="chip">${esc(r.from)} &euro;${r.amount.toFixed(2)}</span>`
+      ).join("");
+      const netClass = hasReimbursements ? "net-cost-cell" : "net-cost-cell full";
+      return `
+        <tr class="summary-expense-row">
+          <td>${esc(e.date)}</td>
+          <td>${esc(e.description) || "<em style='color:#999'>—</em>"}</td>
+          <td>&euro;${e.gross_amount.toFixed(2)}</td>
+          <td><div class="reimbursement-chips">${chips || "<span style='color:#ccc'>—</span>"}</div></td>
+          <td class="${netClass}">&euro;${e.net_personal_amount.toFixed(2)}</td>
+        </tr>`;
+    }).join("");
+  }
+
+  const incSection = document.getElementById("summaryIncomeSection");
+  const incBody = document.getElementById("summaryIncBody");
+  if (data.income.length) {
+    incBody.innerHTML = data.income.map(i =>
+      `<tr><td>${esc(i.date)}</td><td>${esc(i.description)}</td><td>&euro;${i.amount.toFixed(2)}</td></tr>`
+    ).join("");
+    incSection.classList.remove("hidden");
+  } else {
+    incSection.classList.add("hidden");
+  }
 }
 </script>
 </body>

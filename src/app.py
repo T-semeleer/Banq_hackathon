@@ -35,6 +35,7 @@ from bunq_client import BunqClient  # noqa: E402
 from matcher import match as do_split, result_to_dict  # noqa: E402
 from reconciler import reconcile  # noqa: E402
 from bunq import create_payment_links, inject_links  # noqa: E402
+from summarizer import summarize_month  # noqa: E402
 
 app = Flask(__name__, template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
@@ -45,6 +46,7 @@ _state: dict = {
     "split_dict": None,
     "bunq_client": None,
     "account_id": None,
+    "expense_transaction_id": None,  # original outgoing payment that was split
 }
 
 
@@ -162,6 +164,7 @@ def split():
     body = request.get_json(force=True) or {}
     ocr_text = (body.get("ocr_text") or "").strip()
     transcript = (body.get("transcript") or "").strip()
+    expense_txn_id = body.get("expense_transaction_id")
 
     if not ocr_text or not transcript:
         return jsonify({"error": "Both ocr_text and transcript are required"}), 400
@@ -171,6 +174,9 @@ def split():
         split_dict = result_to_dict(result)
         _state["split_result"] = result
         _state["split_dict"] = split_dict
+        if expense_txn_id is not None:
+            _state["expense_transaction_id"] = int(expense_txn_id)
+            split_dict["expense_transaction_id"] = int(expense_txn_id)
         # Persist for simulate_tikkie_payment.py CLI tool
         with open(_ROOT / "last_split.json", "w") as f:
             json.dump(split_dict, f, indent=2)
@@ -208,6 +214,36 @@ def reconcile_status():
         return jsonify({"error": str(exc)}), 500
 
 
+# ── Recent outgoing transactions (expense picker) ──────────────────────────────
+
+@app.route("/api/recent-expenses")
+def recent_expenses():
+    """Return the last 10 outgoing payments so the user can identify the expense being split."""
+    try:
+        client, account_id = _get_bunq()
+        raw = client.get(
+            f"user/{client.user_id}/monetary-account/{account_id}/payment",
+            params={"count": 50},
+        )
+        outgoing = []
+        for item in raw:
+            p = item.get("Payment", {})
+            value = float(p.get("amount", {}).get("value", "0"))
+            if value < 0:
+                outgoing.append({
+                    "id": p.get("id"),
+                    "amount": round(abs(value), 2),
+                    "description": p.get("description", ""),
+                    "date": (p.get("created") or "")[:10],
+                    "counterparty": (p.get("counterparty_alias") or {}).get("display_name", ""),
+                })
+            if len(outgoing) >= 10:
+                break
+        return jsonify(outgoing)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
 # ── Tikkie simulation ──────────────────────────────────────────────────────────
 
 @app.route("/api/simulate", methods=["POST"])
@@ -221,6 +257,11 @@ def simulate():
 
     try:
         client, account_id = _get_bunq()
+        expense_id = _state.get("expense_transaction_id")
+        if expense_id:
+            description = f"SPLIT|TXN{expense_id}|{person}|{float(amount):.2f}"
+        else:
+            description = f"Tikkie repayment — {person}"
         resp = client.post(
             f"user/{client.user_id}/monetary-account/{account_id}/request-inquiry",
             {
@@ -230,13 +271,45 @@ def simulate():
                     "value": "sugardaddy@bunq.com",
                     "name": "Sugar Daddy",
                 },
-                "description": f"Tikkie repayment — {person}",
+                "description": description,
                 "allow_bunqme": False,
             },
         )
         request_id = resp[0]["Id"]["id"]
         time.sleep(1)  # let sandbox process the auto-accept
-        return jsonify({"success": True, "request_id": request_id, "person": person, "amount": float(amount)})
+        return jsonify({
+            "success": True,
+            "request_id": request_id,
+            "person": person,
+            "amount": float(amount),
+            "linked_expense_id": expense_id,
+        })
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+# ── Monthly summary ────────────────────────────────────────────────────────────
+
+@app.route("/api/summary")
+def summary():
+    """
+    Return a monthly expense summary with Tikkie reimbursements netted against
+    their original expenses. Query param: month=YYYY-MM (defaults to current month).
+    """
+    from datetime import date as _date
+    month_str = request.args.get("month", "")
+    try:
+        year_s, month_s = month_str.split("-")
+        year, month = int(year_s), int(month_s)
+        if not (1 <= month <= 12):
+            raise ValueError
+    except (ValueError, AttributeError):
+        today = _date.today()
+        year, month = today.year, today.month
+    try:
+        client, account_id = _get_bunq()
+        result = summarize_month(client, account_id, year, month)
+        return jsonify(result)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 

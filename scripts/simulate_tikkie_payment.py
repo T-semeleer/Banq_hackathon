@@ -35,12 +35,19 @@ def simulate_payment(
     account_id: int,
     person_name: str,
     amount: float,
+    expense_transaction_id: int | None = None,
 ) -> dict:
     """
     Request money from sugardaddy@bunq.com to simulate receiving a Tikkie.
-    The description encodes the person's name for reconciler matching.
+
+    When expense_transaction_id is provided, the description embeds a
+    SPLIT|TXN{id} reference so the monthly summarizer can net this
+    reimbursement against the original expense transaction.
     """
-    description = f"Tikkie repayment — {person_name}"
+    if expense_transaction_id:
+        description = f"SPLIT|TXN{expense_transaction_id}|{person_name}|{amount:.2f}"
+    else:
+        description = f"Tikkie repayment — {person_name}"
     resp = client.post(
         f"user/{client.user_id}/monetary-account/{account_id}/request-inquiry",
         {
@@ -60,6 +67,7 @@ def simulate_payment(
         "person": person_name,
         "amount": amount,
         "description": description,
+        "linked_expense_id": expense_transaction_id,
     }
 
 
@@ -71,6 +79,11 @@ def main() -> None:
                         help="Simulate all non-self people from split file")
     parser.add_argument("--split-file", default="last_split.json",
                         help="JSON file with split result (default: last_split.json)")
+    parser.add_argument("--expense-txn-id", type=int, default=None,
+                        help="Bunq payment ID of the original expense (dinner bill). "
+                             "Embedded in the description so the monthly summarizer can "
+                             "net these Tikkies against the expense. Read from the split "
+                             "file automatically if present.")
     args = parser.parse_args()
 
     api_key = os.getenv("BUNQ_API_KEY", "").strip()
@@ -85,6 +98,7 @@ def main() -> None:
     print(f"Authenticated — user {client.user_id}, account {account_id}\n")
 
     to_simulate: list[tuple[str, float]] = []
+    expense_txn_id: int | None = args.expense_txn_id
 
     if args.simulate_all:
         split_path = Path(args.split_file)
@@ -95,6 +109,9 @@ def main() -> None:
             sys.exit(1)
         with open(split_path) as f:
             data = json.load(f)
+        # Read expense_transaction_id from the split file if not supplied on CLI
+        if expense_txn_id is None:
+            expense_txn_id = data.get("expense_transaction_id")
         for person in data.get("people", []):
             if person["name"].lower() not in _SELF_NAMES and person.get("total_owed", 0) > 0:
                 to_simulate.append((person["name"], person["total_owed"]))
@@ -103,10 +120,13 @@ def main() -> None:
     else:
         parser.error("Provide --person NAME --amount X.XX  or  --all")
 
+    if expense_txn_id:
+        print(f"Linking Tikkies to expense transaction #{expense_txn_id}\n")
+
     results = []
     for name, amount in to_simulate:
         print(f"  Simulating €{amount:.2f} repayment from {name}...")
-        result = simulate_payment(client, account_id, name, amount)
+        result = simulate_payment(client, account_id, name, amount, expense_txn_id)
         results.append(result)
         print(f"    Request #{result['request_id']} — \"{result['description']}\"")
         time.sleep(0.5)
