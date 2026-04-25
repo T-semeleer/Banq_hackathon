@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Bunq · SplitBill</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Maven+Pro:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Bunq-inspired palette */
+    --bg: #0b0b0d;
+    --surface: #16161a;
+    --surface-2: #1f1f24;
+    --border: #2a2a30;
+    --text: #ffffff;
+    --text-dim: #8a8a93;
+    --accent: #ff2d87;       /* bunq magenta */
+    --accent-2: #ff7a3d;     /* bunq orange */
+    --positive: #2bd9a6;
+    --pending: #ffb84d;
+    --radius: 18px;
+    --radius-lg: 24px;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
+  body {
+    font-family: "Maven Pro", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-weight: 500;
+    min-height: 100vh;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* ---------- Layout shell (mobile-first, max 480px) ---------- */
+  .app {
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  /* ---------- Brand header ---------- */
+  .brand {
+    text-align: center;
+    padding: 22px 20px 14px;
+  }
+  .brand h1 {
+    margin: 0;
+    font-weight: 900;
+    font-size: 26px;
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+  .brand .euro { color: var(--accent); }
+
+  /* Rainbow accent bar (bunq signature) */
+  .rainbow-bar {
+    height: 4px;
+    width: 100%;
+    background: linear-gradient(
+      90deg,
+      #ff2d87 0%,
+      #ff5a3d 18%,
+      #ffb84d 34%,
+      #ffe14d 50%,
+      #2bd9a6 66%,
+      #3da9ff 82%,
+      #a056ff 100%
+    );
+  }
+
+  /* ---------- Page header ---------- */
+  .page-head {
+    padding: 22px 20px 8px;
+  }
+  .page-head .eyebrow {
+    color: var(--text-dim);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 700;
+  }
+  .page-head h2 {
+    margin: 6px 0 4px;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+  }
+  .page-head .meta {
+    color: var(--text-dim);
+    font-size: 14px;
+    font-weight: 500;
+  }
+  .page-head .meta strong { color: var(--text); font-weight: 700; }
+
+  /* ---------- Request list ---------- */
+  .list {
+    padding: 18px 16px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* ---------- Request card ---------- */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    transition: transform .15s ease, background .15s ease, border-color .15s ease;
+  }
+  .card:hover { background: var(--surface-2); border-color: #36363d; }
+  .card:active { transform: scale(0.985); }
+
+  .avatar {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    flex: 0 0 48px;
+    font-weight: 800;
+    font-size: 17px;
+    color: #0b0b0d;
+    background: var(--accent);
+  }
+
+  .card-body {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .card-name {
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .card-label {
+    font-size: 13px;
+    color: var(--text-dim);
+    font-weight: 500;
+  }
+
+  .card-amount {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+    flex: 0 0 auto;
+  }
+  .amount {
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: -0.2px;
+  }
+  .status {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    line-height: 1;
+  }
+  .status.paid    { background: rgba(43,217,166,.12); color: var(--positive); }
+  .status.pending { background: rgba(255,184,77,.12); color: var(--pending); }
+  .status.opened  { background: rgba(255,255,255,.08); color: var(--text-dim); }
+
+  /* ---------- Empty state ---------- */
+  .empty {
+    text-align: center;
+    color: var(--text-dim);
+    padding: 40px 24px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-lg);
+    margin: 18px 16px;
+    font-size: 14px;
+  }
+
+  /* ---------- Footer rainbow ---------- */
+  .footer-bar {
+    margin-top: auto;
+    height: 6px;
+    background: linear-gradient(
+      90deg,
+      #ff2d87, #ff5a3d, #ffb84d, #ffe14d, #2bd9a6, #3da9ff, #a056ff
+    );
+  }
+
+  /* ---------- Dev controls (remove later) ---------- */
+  .dev-controls {
+    padding: 12px 16px 0;
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+  }
+  .dev-controls button {
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .dev-controls button:hover { background: var(--surface-2); }
+</style>
+</head>
+<body>
+  <div class="app">
+    <!-- Brand -->
+    <header class="brand">
+      <h1>bunq<span class="euro">.</span></h1>
+    </header>
+    <div class="rainbow-bar" aria-hidden="true"></div>
+
+    <!-- Page header -->
+    <section class="page-head">
+      <div class="eyebrow">SplitBill</div>
+      <h2 id="bill-title">Dinner at Toscanini</h2>
+      <div class="meta">
+        <span id="bill-date">25 Apr</span> · total <strong id="bill-total">€0,00</strong>
+      </div>
+    </section>
+
+    <!-- Dev controls (delete when wiring real data) -->
+    <div class="dev-controls">
+      <button onclick="addRequest()">+ Add request</button>
+      <button onclick="renderRequests([])">Empty state</button>
+      <button onclick="renderRequests(SAMPLE)">Reset sample</button>
+    </div>
+
+    <!-- Request list (rendered from data) -->
+    <main id="list" class="list" aria-label="Payment requests"></main>
+
+    <div class="footer-bar" aria-hidden="true"></div>
+  </div>
+
+  <!-- Card template -->
+  <template id="card-template">
+    <article class="card" role="link" tabindex="0">
+      <div class="avatar"></div>
+      <div class="card-body">
+        <div class="card-name"></div>
+        <div class="card-label"></div>
+      </div>
+      <div class="card-amount">
+        <div class="amount"></div>
+        <div class="status"></div>
+      </div>
+    </article>
+  </template>
+
+  <script>
+    /* ------------------------------------------------------------
+     * Data model
+     * Each request describes one payment link generated by SplitBill.
+     * Replace SAMPLE with data from your backend / OCR pipeline.
+     * ---------------------------------------------------------- */
+    const SAMPLE = [
+      { id: "r1", name: "Eva",    label: "Pasta + wine",          amount: 24.50, status: "paid"    },
+      { id: "r2", name: "Lars",   label: "Pizza margherita",      amount: 14.00, status: "pending" },
+      { id: "r3", name: "Noa",    label: "Risotto + dessert",     amount: 28.75, status: "opened"  },
+      { id: "r4", name: "Sem",    label: "Steak + 2 beers",       amount: 36.20, status: "pending" },
+      { id: "r5", name: "Fleur",  label: "Salad + sparkling water", amount: 18.40, status: "paid"  },
+    ];
+
+    /* Color palette used to tint avatars deterministically by name */
+    const AVATAR_COLORS = [
+      "#ff2d87", "#ff7a3d", "#ffb84d", "#2bd9a6",
+      "#3da9ff", "#a056ff", "#ff4dd2", "#ffe14d"
+    ];
+
+    /* ------------------------------------------------------------
+     * Helpers
+     * ---------------------------------------------------------- */
+    const fmtEuro = (n) =>
+      "€" + n.toFixed(2).replace(".", ",");
+
+    const initials = (name) =>
+      name.trim().split(/\s+/).map(s => s[0]).slice(0, 2).join("").toUpperCase();
+
+    const colorFor = (name) => {
+      let h = 0;
+      for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+      return AVATAR_COLORS[h % AVATAR_COLORS.length];
+    };
+
+    const STATUS_TEXT = {
+      paid:    "Paid",
+      pending: "Pending",
+      opened:  "Opened",
+    };
+
+    /* ------------------------------------------------------------
+     * Rendering
+     * ---------------------------------------------------------- */
+    function renderRequests(requests) {
+      const list = document.getElementById("list");
+      const tpl  = document.getElementById("card-template");
+      list.innerHTML = "";
+
+      // Total
+      const total = requests.reduce((sum, r) => sum + r.amount, 0);
+      document.getElementById("bill-total").textContent = fmtEuro(total);
+
+      if (requests.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "No payment requests yet.";
+        list.appendChild(empty);
+        return;
+      }
+
+      for (const r of requests) {
+        const node = tpl.content.firstElementChild.cloneNode(true);
+        const avatar = node.querySelector(".avatar");
+        avatar.textContent = initials(r.name);
+        avatar.style.background = colorFor(r.name);
+
+        node.querySelector(".card-name").textContent = r.name;
+        node.querySelector(".card-label").textContent =
+          r.label || "Payment request";
+
+        node.querySelector(".amount").textContent = fmtEuro(r.amount);
+
+        const status = node.querySelector(".status");
+        const key = (r.status || "pending").toLowerCase();
+        status.textContent = STATUS_TEXT[key] || "Pending";
+        status.classList.add(key);
+
+        // Each card represents a unique payment link
+        node.addEventListener("click", () => {
+          // window.location.href = `/pay/${r.id}`;
+          console.log("Open payment link for", r.id);
+        });
+
+        list.appendChild(node);
+      }
+    }
+
+    /* ------------------------------------------------------------
+     * Dev: live add for prototyping
+     * ---------------------------------------------------------- */
+    let _data = [...SAMPLE];
+    function addRequest() {
+      const names = ["Tess", "Mees", "Lieke", "Daan", "Saar", "Finn", "Roos", "Bram"];
+      const labels = ["Drinks", "Main course", "Shared plates", "Dessert", "Tip"];
+      const statuses = ["paid", "pending", "opened"];
+      const pick = (a) => a[Math.floor(Math.random() * a.length)];
+      _data.push({
+        id: "r" + (_data.length + 1),
+        name: pick(names),
+        label: pick(labels),
+        amount: +(5 + Math.random() * 40).toFixed(2),
+        status: pick(statuses),
+      });
+      renderRequests(_data);
+    }
+    // Override reset to keep _data in sync
+    const _renderRequests = renderRequests;
+    renderRequests = (arr) => { _data = [...arr]; _renderRequests(arr); };
+
+    // Initial render
+    renderRequests(SAMPLE);
+  </script>
+</body>
+</html>
