@@ -15,5 +15,9 @@
       "WebFetch(domain:www.postman.com)",
       "WebFetch(domain:beta.doc.bunq.com)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "claude-flow"
+  ],
+  "enableAllProjectMcpServers": true
 }

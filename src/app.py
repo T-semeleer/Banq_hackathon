@@ -42,6 +42,7 @@ from bunq_insights import (  # noqa: E402
     fetch_event_feed,
     fetch_insight_preference,
     fetch_all_categories,
+    build_monthly_insights_with_footnotes,
 )
 from category_store import get as _get_category  # noqa: E402
 
@@ -56,6 +57,7 @@ _state: dict = {
     "account_id": None,
     "expense_transaction_id": None,  # original outgoing payment that was split
     "demo_expenses": None,           # populated by POST /api/demo/setup
+    "footnotes": [],                 # accumulated reconcile results across all splits
 }
 
 
@@ -209,6 +211,24 @@ def links():
         return jsonify({"error": str(exc)}), 500
 
 
+# ── Footnote persistence ───────────────────────────────────────────────────────
+
+_FOOTNOTES_PATH = _ROOT / "footnotes.json"
+
+
+def _load_footnotes() -> list:
+    if not _FOOTNOTES_PATH.exists():
+        return []
+    try:
+        return json.loads(_FOOTNOTES_PATH.read_text())
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def _save_footnotes(footnotes: list) -> None:
+    _FOOTNOTES_PATH.write_text(json.dumps(footnotes, indent=2))
+
+
 # ── Reconciliation ─────────────────────────────────────────────────────────────
 
 @app.route("/api/reconcile", methods=["GET"])
@@ -218,9 +238,29 @@ def reconcile_status():
     try:
         client, account_id = _get_bunq()
         status = reconcile(client, account_id, _state["split_result"])
+        # Persist this reconcile result to disk (upsert by expense_transaction_id)
+        exp_id = _state.get("expense_transaction_id")
+        footnote = {**status, "expense_transaction_id": exp_id}
+        footnotes = _load_footnotes()
+        existing = next(
+            (i for i, f in enumerate(footnotes)
+             if f.get("expense_transaction_id") == exp_id),
+            None,
+        )
+        if existing is not None:
+            footnotes[existing] = footnote
+        else:
+            footnotes.append(footnote)
+        _save_footnotes(footnotes)
         return jsonify(status)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/footnotes")
+def get_footnotes():
+    """Return all persisted split reconcile results for use in the monthly summary."""
+    return jsonify({"footnotes": _load_footnotes()})
 
 
 # ── Recent outgoing transactions (expense picker) ──────────────────────────────
@@ -557,6 +597,26 @@ def event_feed():
         count = min(max(int(request.args.get("count", 50)), 1), 200)
         client, account_id = _get_bunq()
         result = fetch_event_feed(client, account_id=account_id, count=count)
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/monthly-insights")
+def monthly_insights():
+    """
+    Monthly expense insights categorized with footnote logic.
+
+    For each expense: if it was split (reimbursements received), the net personal
+    amount is used; otherwise the gross amount is used. Results are grouped by
+    spending category.
+
+    Query param: month=YYYY-MM (defaults to current month).
+    """
+    year, month = _parse_month(request.args.get("month", ""))
+    try:
+        client, account_id = _get_bunq()
+        result = build_monthly_insights_with_footnotes(client, account_id, year, month)
         return jsonify(result)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500

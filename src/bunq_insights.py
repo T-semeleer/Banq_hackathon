@@ -304,6 +304,102 @@ def fetch_event_feed(
     return {"events": events, "count": len(events)}
 
 
+def build_monthly_insights_with_footnotes(
+    client: BunqClient,
+    account_id: int,
+    year: int,
+    month: int,
+) -> dict:
+    """
+    Monthly category breakdown using footnote logic:
+    - If an expense has reimbursements (split bill), use net_personal_amount (the footnote).
+    - Otherwise use gross_amount.
+
+    Returns:
+        {
+          "period": "YYYY-MM",
+          "categories": [
+            {
+              "category": str,
+              "label": str,
+              "color": str,
+              "total_amount": float,
+              "transaction_count": int,
+              "currency": str,
+              "transactions": [
+                {
+                  "transaction_id": int,
+                  "description": str,
+                  "gross_amount": float,
+                  "net_amount": float,
+                  "has_footnote": bool,
+                  "date": str
+                }
+              ]
+            }
+          ],
+          "totals": {
+            "gross_expenses": float,
+            "tikkie_reimbursements_received": float,
+            "net_personal_expenses": float,
+            "other_income": float
+          },
+          "currency": str,
+          "source": str
+        }
+    """
+    from summarizer import summarize_month  # avoid circular at module level
+
+    summary = summarize_month(client, account_id, year, month)
+    category_map = all_assignments()
+
+    buckets: dict[str, dict] = {}
+
+    for expense in summary["expenses"]:
+        txn_id = expense["transaction_id"]
+        has_footnote = len(expense["reimbursements"]) > 0
+        amount = expense["net_personal_amount"] if has_footnote else expense["gross_amount"]
+        category = category_map.get(txn_id, "OTHER")
+
+        if category not in buckets:
+            buckets[category] = {
+                "category": category,
+                "label": LABELS.get(category, category.replace("_", " ").title()),
+                "color": COLORS.get(category, "#757575"),
+                "total_amount": 0.0,
+                "transaction_count": 0,
+                "currency": "EUR",
+                "transactions": [],
+            }
+
+        buckets[category]["total_amount"] = round(
+            buckets[category]["total_amount"] + amount, 2
+        )
+        buckets[category]["transaction_count"] += 1
+        buckets[category]["transactions"].append({
+            "transaction_id": txn_id,
+            "description": expense["description"],
+            "gross_amount": expense["gross_amount"],
+            "net_amount": expense["net_personal_amount"],
+            "has_footnote": has_footnote,
+            "date": expense["date"],
+        })
+
+    categories = sorted(
+        buckets.values(),
+        key=lambda c: c["total_amount"],
+        reverse=True,
+    )
+
+    return {
+        "period": summary["period"],
+        "categories": categories,
+        "totals": summary["totals"],
+        "currency": "EUR",
+        "source": "sandbox_overlay",
+    }
+
+
 def fetch_insight_preference(client: BunqClient) -> dict:
     """
     User's configured monthly period start day via /insight-preference-date.

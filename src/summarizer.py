@@ -23,32 +23,13 @@ _SPLIT_RE = re.compile(r"SPLIT\|TXN(\d+)\|([^|]+)\|(\d+\.\d{2})", re.IGNORECASE)
 
 def summarize_month(client: BunqClient, account_id: int, year: int, month: int) -> dict:
     """
-    Return a monthly expense summary with Tikkie reimbursements netted against
-    their originating expense transactions.
+    Return a monthly expense summary with Tikkie reimbursements netted out.
 
-    Returns:
-        {
-          "period": "YYYY-MM",
-          "expenses": [
-            {
-              "transaction_id": int,
-              "description": str,
-              "gross_amount": float,
-              "reimbursements": [{"transaction_id": int, "from": str, "amount": float}],
-              "net_personal_amount": float,
-              "date": str,
-              "type": str
-            }
-          ],
-          "income": [{"transaction_id": int, "description": str, "amount": float, "date": str}],
-          "unmatched_tikkies": [...],
-          "totals": {
-            "gross_expenses": float,
-            "tikkie_reimbursements_received": float,
-            "net_personal_expenses": float,
-            "other_income": float
-          }
-        }
+    - gross_expenses: total of all outgoing payments (everything that left your account)
+    - tikkie_reimbursements_received: incoming Tikkies that are linked to a specific
+      bill split via the SPLIT|TXN format — based on the bill and how it was split
+    - net_personal_expenses: gross_expenses - tikkie_reimbursements_received
+    - other_income: all other incoming payments (including unlinked Tikkies)
     """
     raw = fetch_payments_for_month(client, account_id, year, month)
 
@@ -87,7 +68,7 @@ def summarize_month(client: BunqClient, account_id: int, year: int, month: int) 
                     "date": p["created"][:10],
                 })
 
-    # Net each tagged Tikkie against its referenced expense
+    # Link each Tikkie to its originating bill
     unmatched_ids: set[int] = set()
     unmatched: list[dict] = []
     for t in tikkies:
@@ -107,9 +88,12 @@ def summarize_month(client: BunqClient, account_id: int, year: int, month: int) 
         exp["net_personal_amount"] = round(max(0.0, exp["net_personal_amount"]), 2)
 
     expense_list = sorted(expenses.values(), key=lambda x: x["date"], reverse=True)
-    matched_tikkie_total = round(
+
+    gross_expenses = round(sum(e["gross_amount"] for e in expense_list), 2)
+    tikkie_total = round(
         sum(t["amount"] for t in tikkies if t["transaction_id"] not in unmatched_ids), 2
     )
+    net_personal = round(max(0.0, gross_expenses - tikkie_total), 2)
 
     return {
         "period": f"{year:04d}-{month:02d}",
@@ -117,9 +101,9 @@ def summarize_month(client: BunqClient, account_id: int, year: int, month: int) 
         "income": sorted(other_income, key=lambda x: x["date"], reverse=True),
         "unmatched_tikkies": unmatched,
         "totals": {
-            "gross_expenses": round(sum(e["gross_amount"] for e in expense_list), 2),
-            "tikkie_reimbursements_received": matched_tikkie_total,
-            "net_personal_expenses": round(sum(e["net_personal_amount"] for e in expense_list), 2),
+            "gross_expenses": gross_expenses,
+            "tikkie_reimbursements_received": tikkie_total,
+            "net_personal_expenses": net_personal,
             "other_income": round(sum(i["amount"] for i in other_income), 2),
         },
     }

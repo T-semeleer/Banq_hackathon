@@ -25,6 +25,7 @@ Rules:
 - Items mentioned without a clear owner go to "unassigned"
 - If a price is not explicitly on the receipt, estimate 0.00
 - Always output valid JSON, no explanatory text outside the JSON block
+- Output compact JSON (no extra whitespace or indentation)
 - Round all monetary values to 2 decimal places"""
 
 _USER_TEMPLATE = """RECEIPT TEXT (from OCR):
@@ -87,7 +88,7 @@ def match(ocr_text: str, transcript: str) -> SplitResult:
 
     response = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=2000,
+        max_tokens=8192,
         system=_SYSTEM_PROMPT,
         messages=[
             {
@@ -99,6 +100,9 @@ def match(ocr_text: str, transcript: str) -> SplitResult:
             }
         ],
     )
+
+    if response.stop_reason == "max_tokens":
+        raise ValueError("Receipt is too large to process — try with fewer items.")
 
     text = response.content[0].text.strip()
     # Strip markdown code fences Claude sometimes wraps around JSON

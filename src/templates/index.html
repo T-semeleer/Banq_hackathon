@@ -196,6 +196,46 @@
                vertical-align: middle; margin-right: .4rem; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* Monthly Insights */
+    .insights-grid { display: grid; gap: .75rem; margin-top: 1.25rem; }
+    .category-row {
+      border: 1px solid #f0f0f0; border-radius: 10px; overflow: hidden;
+      cursor: pointer; transition: box-shadow .15s;
+    }
+    .category-row:hover { box-shadow: 0 2px 8px rgba(0,0,0,.1); }
+    .category-header {
+      display: flex; align-items: center; gap: .75rem; padding: .75rem 1rem;
+      position: relative;
+    }
+    .cat-bar {
+      position: absolute; left: 0; top: 0; bottom: 0;
+      opacity: .12; border-radius: 10px; pointer-events: none;
+      transition: width .4s ease;
+    }
+    .cat-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; z-index: 1; }
+    .cat-label { font-weight: 700; font-size: .9rem; flex: 1; z-index: 1; }
+    .cat-count { font-size: .75rem; color: #888; z-index: 1; white-space: nowrap; }
+    .cat-amount { font-weight: 800; font-size: 1rem; z-index: 1; white-space: nowrap; }
+    .cat-chevron { color: #aaa; font-size: .75rem; z-index: 1; transition: transform .2s; }
+    .category-row.open .cat-chevron { transform: rotate(180deg); }
+    .cat-transactions { display: none; border-top: 1px solid #f5f5f5; }
+    .category-row.open .cat-transactions { display: block; }
+    .cat-txn-row {
+      display: flex; align-items: center; gap: .6rem; padding: .5rem 1rem;
+      border-bottom: 1px solid #f8f8f8; font-size: .82rem; flex-wrap: wrap;
+    }
+    .cat-txn-row:last-child { border-bottom: none; }
+    .cat-txn-date { color: #999; white-space: nowrap; min-width: 80px; }
+    .cat-txn-desc { flex: 1; color: #333; }
+    .cat-txn-amounts { display: flex; align-items: center; gap: .4rem; white-space: nowrap; }
+    .cat-txn-gross { color: #aaa; text-decoration: line-through; font-size: .78rem; }
+    .cat-txn-net { font-weight: 700; color: #111; }
+    .badge-footnote {
+      background: #d1fae5; color: #065f46; border-radius: 10px;
+      padding: .1rem .45rem; font-size: .68rem; font-weight: 700; white-space: nowrap;
+    }
+    .insights-totals { display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem; }
+
     /* Camera modal */
     .cam-overlay {
       display: none; position: fixed; inset: 0;
@@ -352,7 +392,18 @@
     <div id="summaryResults" class="hidden" style="margin-top:1.25rem;">
       <div class="summary-row" id="summaryTotals"></div>
 
-      <div style="overflow-x:auto;margin-top:1.25rem;">
+      <!-- Category breakdown (net spend per category) -->
+      <div style="margin-top:1.5rem;">
+        <div style="font-size:.78rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.6rem;">
+          Spend by Category
+        </div>
+        <div class="insights-grid" id="summaryCatGrid"></div>
+      </div>
+
+      <div style="margin-top:1.5rem;font-size:.78rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.5rem;">
+        All Transactions
+      </div>
+      <div style="overflow-x:auto;">
         <table>
           <thead>
             <tr>
@@ -380,6 +431,7 @@
       </div>
     </div>
   </div>
+
 
 </main>
 
@@ -839,6 +891,60 @@ function syntaxHighlight(json) {
     });
 }
 
+// ── Category grid (used inside Monthly Summary) ───────────────────────────────
+function renderSummaryCategoryGrid(data) {
+  const grid = document.getElementById("summaryCatGrid");
+  if (!data || !data.categories) {
+    grid.innerHTML = '<p style="color:#aaa;font-size:.82rem;">No category data available.</p>';
+    return;
+  }
+
+  const maxAmount = data.categories.reduce((m, c) => Math.max(m, c.total_amount), 0) || 1;
+  grid.innerHTML = "";
+
+  data.categories.forEach(cat => {
+    const barPct = Math.round((cat.total_amount / maxAmount) * 100);
+    const txnRows = cat.transactions.map(txn => {
+      const hasFootnote = txn.has_footnote;
+      const grossHtml = hasFootnote
+        ? `<span class="cat-txn-gross">&euro;${txn.gross_amount.toFixed(2)}</span>`
+        : "";
+      const footnoteTag = hasFootnote
+        ? `<span class="badge-footnote">split</span>`
+        : "";
+      return `
+        <div class="cat-txn-row">
+          <span class="cat-txn-date">${esc(txn.date)}</span>
+          <span class="cat-txn-desc">${esc(txn.description) || "<em style='color:#bbb'>—</em>"}</span>
+          <span class="cat-txn-amounts">
+            ${grossHtml}
+            <span class="cat-txn-net">&euro;${txn.net_amount.toFixed(2)}</span>
+            ${footnoteTag}
+          </span>
+        </div>`;
+    }).join("");
+
+    const row = document.createElement("div");
+    row.className = "category-row";
+    row.innerHTML = `
+      <div class="category-header" onclick="this.parentElement.classList.toggle('open')">
+        <div class="cat-bar" style="width:${barPct}%;background:${esc(cat.color)}"></div>
+        <div class="cat-dot" style="background:${esc(cat.color)}"></div>
+        <span class="cat-label">${esc(cat.label)}</span>
+        <span class="cat-count">${cat.transaction_count} txn${cat.transaction_count !== 1 ? "s" : ""}</span>
+        <span class="cat-amount">&euro;${cat.total_amount.toFixed(2)}</span>
+        <span class="cat-chevron">&#9660;</span>
+      </div>
+      <div class="cat-transactions">${txnRows}</div>
+    `;
+    grid.appendChild(row);
+  });
+
+  if (!data.categories.length) {
+    grid.innerHTML = '<p style="color:#aaa;font-size:.82rem;">No categorised expenses this month.</p>';
+  }
+}
+
 // ── Utility ───────────────────────────────────────────────────────────────────
 function esc(str) {
   return String(str ?? "")
@@ -861,10 +967,20 @@ async function loadSummary() {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Loading…';
   try {
-    const res = await fetch(`/api/summary?month=${month}`);
-    const data = await res.json();
-    if (data.error) { alert("Summary error: " + data.error); return; }
-    renderSummary(data);
+    const [summaryRes, insightsRes, footnotesRes] = await Promise.all([
+      fetch(`/api/summary?month=${month}`),
+      fetch(`/api/monthly-insights?month=${month}`),
+      fetch('/api/footnotes'),
+    ]);
+    const [summaryData, insightsData, footnotesData] = await Promise.all([
+      summaryRes.json(),
+      insightsRes.json(),
+      footnotesRes.json(),
+    ]);
+    if (summaryData.error) { alert("Summary error: " + summaryData.error); return; }
+    const enriched = applyFootnotes(summaryData, footnotesData.footnotes || []);
+    renderSummary(enriched);
+    renderSummaryCategoryGrid(insightsData.error ? null : insightsData);
     document.getElementById("summaryResults").classList.remove("hidden");
   } catch (err) {
     alert("Error: " + err.message);
@@ -873,6 +989,83 @@ async function loadSummary() {
     btn.textContent = "Load Summary";
   }
 }
+
+function applyFootnotes(summaryData, footnotes) {
+  if (!footnotes.length) return summaryData;
+
+  // Build expense lookup by ID for amount comparison
+  const expenseMap = {};
+  summaryData.expenses.forEach(e => { expenseMap[e.transaction_id] = e; });
+
+  // Collect paid Tikkie transaction IDs from footnotes
+  const footnotePaidTxnIds = new Set();
+  footnotes.forEach(fn => {
+    (fn.payments || []).forEach(p => { if (p.paid) footnotePaidTxnIds.add(p.transaction_id); });
+  });
+
+  // Move matched Other Income entries → Tikkies Received
+  // Also suppress unlinked Tikkie noise from Other Income
+  const isTikkieNoise = i => /tikkie/i.test(i.description) && !footnotePaidTxnIds.has(i.transaction_id);
+  const movedIncome = summaryData.income.filter(i => footnotePaidTxnIds.has(i.transaction_id));
+  const remainingIncome = summaryData.income.filter(i => !footnotePaidTxnIds.has(i.transaction_id) && !isTikkieNoise(i));
+  const movedTotal = round2(movedIncome.reduce((s, i) => s + i.amount, 0));
+
+  // For each footnote: check if the linked bunq expense exists AND the amounts match
+  // (within €0.50). If not, the footnote represents a separate untracked expense —
+  // add its original_total to gross and insert it as a virtual transaction row.
+  let extraGross = 0;
+  const virtualExpenses = [];
+
+  footnotes.forEach(fn => {
+    const expId = fn.expense_transaction_id;
+    const bunqExp = expId ? expenseMap[expId] : null;
+    const amountMatches = bunqExp &&
+      Math.abs(bunqExp.gross_amount - (fn.original_total || 0)) <= 0.50;
+
+    if (!amountMatches) {
+      extraGross = round2(extraGross + (fn.original_total || 0));
+
+      // Build a virtual row so it shows up in All Transactions
+      const firstPaid = (fn.payments || []).find(p => p.paid);
+      const date = firstPaid ? firstPaid.paid_at.slice(0, 10) : (summaryData.expenses[0]?.date || '');
+      virtualExpenses.push({
+        transaction_id: null,
+        description: 'Receipt (bill split)',
+        gross_amount: fn.original_total || 0,
+        net_personal_amount: fn.net_cost || 0,
+        reimbursements: (fn.payments || [])
+          .filter(p => p.paid)
+          .map(p => ({ from: p.name, amount: p.amount_owed })),
+        date,
+        is_footnote_only: true,
+      });
+    }
+  });
+
+  const newGross   = round2(summaryData.totals.gross_expenses + extraGross);
+  const newTikkies = round2(summaryData.totals.tikkie_reimbursements_received + movedTotal);
+  const newNet     = round2(Math.max(0, newGross - newTikkies));
+  const newOther   = round2(remainingIncome
+    .filter(i => i.description !== "Demo account funding")
+    .reduce((s, i) => s + i.amount, 0));
+
+  const allExpenses = [...summaryData.expenses, ...virtualExpenses]
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+  return {
+    ...summaryData,
+    expenses: allExpenses,
+    income: remainingIncome.filter(i => i.description !== "Demo account funding"),
+    totals: {
+      gross_expenses: newGross,
+      tikkie_reimbursements_received: newTikkies,
+      net_personal_expenses: newNet,
+      other_income: newOther,
+    },
+  };
+}
+
+function round2(n) { return Math.round(n * 100) / 100; }
 
 function renderSummary(data) {
   const t = data.totals;
@@ -900,18 +1093,22 @@ function renderSummary(data) {
     expBody.innerHTML = '<tr><td colspan="5" style="color:#888;text-align:center;padding:1rem;">No expenses this month.</td></tr>';
   } else {
     expBody.innerHTML = data.expenses.map(e => {
-      const hasReimbursements = e.reimbursements.length > 0;
-      const chips = e.reimbursements.map(r =>
+      const reimbs = e.reimbursements || [];
+      const hasReimbursements = reimbs.length > 0;
+      const chips = reimbs.map(r =>
         `<span class="chip">${esc(r.from)} &euro;${r.amount.toFixed(2)}</span>`
       ).join("");
       const netClass = hasReimbursements ? "net-cost-cell" : "net-cost-cell full";
+      const badge = e.is_footnote_only
+        ? `<span style="margin-left:6px;font-size:11px;background:#e8f4fd;color:#1976d2;border-radius:4px;padding:2px 6px;vertical-align:middle;">receipt</span>`
+        : '';
       return `
         <tr class="summary-expense-row">
           <td>${esc(e.date)}</td>
-          <td>${esc(e.description) || "<em style='color:#999'>—</em>"}</td>
-          <td>&euro;${e.gross_amount.toFixed(2)}</td>
+          <td>${esc(e.description) || "<em style='color:#999'>—</em>"}${badge}</td>
+          <td>&euro;${(e.gross_amount || 0).toFixed(2)}</td>
           <td><div class="reimbursement-chips">${chips || "<span style='color:#ccc'>—</span>"}</div></td>
-          <td class="${netClass}">&euro;${e.net_personal_amount.toFixed(2)}</td>
+          <td class="${netClass}">&euro;${(e.net_personal_amount || 0).toFixed(2)}</td>
         </tr>`;
     }).join("");
   }
