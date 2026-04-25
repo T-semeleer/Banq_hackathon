@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SplitBill — bunq</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f0f4f8;
+      min-height: 100vh;
+      color: #111;
+    }
+
+    header {
+      background: #00c389;
+      color: #fff;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15);
+    }
+    header h1 { font-size: 1.4rem; font-weight: 800; }
+    header span { font-size: 0.85rem; opacity: .8; }
+
+    main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; display: grid; gap: 1.5rem; }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.08);
+      padding: 1.5rem;
+    }
+
+    .card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .step-badge {
+      background: #00c389;
+      color: #fff;
+      border-radius: 50%;
+      width: 22px; height: 22px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+
+    label { display: block; font-size: 0.78rem; font-weight: 600; color: #555;
+            text-transform: uppercase; letter-spacing: .04em; margin-bottom: .35rem; }
+
+    textarea, input[type="text"] {
+      width: 100%; border: 1.5px solid #d1d5db; border-radius: 8px;
+      padding: .65rem .75rem; font-size: .9rem; line-height: 1.5;
+      resize: vertical; transition: border-color .15s;
+    }
+    textarea:focus, input:focus { outline: none; border-color: #00c389; }
+    textarea { min-height: 120px; }
+
+    /* Buttons */
+    .btn {
+      border: none; border-radius: 8px; cursor: pointer;
+      font-size: .875rem; font-weight: 600; padding: .6rem 1.1rem;
+      transition: opacity .15s, transform .1s;
+    }
+    .btn:active  { transform: scale(.97); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+    .btn-primary  { background: #00c389; color: #fff; }
+    .btn-secondary{ background: #f3f4f6; color: #333; }
+    .btn-danger   { background: #ef4444; color: #fff; }
+    .btn-sim      { background: #f59e0b; color: #fff; font-size: .78rem; padding: .35rem .75rem; }
+    .btn-sm       { padding: .35rem .75rem; font-size: .78rem; }
+
+    .btn-row { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: .75rem; }
+
+    /* Recording status */
+    .status-row { display: flex; align-items: center; gap: .5rem; min-height: 1.4rem; margin-bottom: .75rem; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: #ccc; flex-shrink: 0; }
+    .dot.recording { background: #ef4444; animation: pulse 1s infinite; }
+    .dot.ready { background: #00c389; }
+    .dot.loading { background: #f59e0b; }
+    @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
+    .status-text { font-size: .82rem; color: #555; }
+    .timer { margin-left: auto; font-size: .82rem; font-variant-numeric: tabular-nums;
+             color: #ef4444; font-weight: 600; }
+
+    audio { width: 100%; margin-top: .6rem; display: none; }
+    audio.visible { display: block; }
+
+    /* Results table */
+    table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    th { background: #f8f9fa; padding: .55rem .75rem; text-align: left;
+         font-size: .75rem; font-weight: 700; color: #666;
+         text-transform: uppercase; letter-spacing: .04em; }
+    td { padding: .6rem .75rem; border-top: 1px solid #f0f0f0; vertical-align: middle; }
+    tr:hover td { background: #fafafa; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: .3rem;
+      padding: .2rem .55rem; border-radius: 20px; font-size: .75rem; font-weight: 600;
+    }
+    .badge-paid    { background: #d1fae5; color: #065f46; }
+    .badge-pending { background: #fef3c7; color: #92400e; }
+    .badge-self    { background: #e0e7ff; color: #3730a3; }
+
+    .link-btn { font-size: .78rem; color: #00c389; text-decoration: none; font-weight: 600; }
+    .link-btn:hover { text-decoration: underline; }
+
+    /* Footnote JSON */
+    .json-block {
+      background: #1e1e2e; color: #cdd6f4; border-radius: 8px;
+      padding: 1rem; font-family: "Fira Code", "Consolas", monospace;
+      font-size: .82rem; line-height: 1.6; overflow-x: auto; white-space: pre;
+    }
+    .json-key    { color: #89b4fa; }
+    .json-str    { color: #a6e3a1; }
+    .json-num    { color: #fab387; }
+    .json-bool-t { color: #a6e3a1; }
+    .json-bool-f { color: #f38ba8; }
+    .json-null   { color: #9399b2; }
+
+    /* Net cost summary */
+    .summary-row {
+      display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem;
+    }
+    .summary-box {
+      flex: 1; min-width: 130px; background: #f8f9fa; border-radius: 8px;
+      padding: .75rem 1rem; text-align: center;
+    }
+    .summary-box .label { font-size: .7rem; color: #888; text-transform: uppercase;
+                          letter-spacing: .05em; margin-bottom: .2rem; }
+    .summary-box .value { font-size: 1.3rem; font-weight: 800; color: #111; }
+    .summary-box.highlight .value { color: #00c389; }
+
+    /* Error */
+    .error-box { display: none; background: #fef2f2; border: 1px solid #fca5a5;
+                 border-radius: 8px; padding: .6rem 1rem; color: #b91c1c;
+                 font-size: .82rem; margin-top: .75rem; }
+    .error-box.visible { display: block; }
+
+    .hidden { display: none !important; }
+
+    .spinner { display: inline-block; width: 14px; height: 14px;
+               border: 2px solid #fff; border-top-color: transparent;
+               border-radius: 50%; animation: spin .6s linear infinite;
+               vertical-align: middle; margin-right: .4rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>SplitBill</h1>
+  <span>powered by bunq + Claude</span>
+</header>
+
+<main>
+
+  <!-- ── Step 1 + 2: Inputs ───────────────────────────────────────────────── -->
+  <div class="two-col">
+
+    <!-- Receipt OCR -->
+    <div class="card">
+      <div class="card-title"><span class="step-badge">1</span> Receipt</div>
+      <label for="imageInput">Upload receipt image (optional)</label>
+      <input type="file" id="imageInput" accept="image/*" style="margin-bottom:.75rem;font-size:.85rem;">
+      <button class="btn btn-secondary btn-sm" id="btnOcr" onclick="runOcr()">Extract Text</button>
+      <div class="error-box" id="ocrError"></div>
+      <div style="margin-top:.75rem;">
+        <label for="ocrText">Receipt text</label>
+        <textarea id="ocrText" placeholder="Receipt items will appear here — or paste manually."></textarea>
+      </div>
+    </div>
+
+    <!-- Voice -->
+    <div class="card">
+      <div class="card-title"><span class="step-badge">2</span> Voice memo</div>
+      <div class="status-row">
+        <div class="dot" id="dot"></div>
+        <span class="status-text" id="statusText">Ready to record</span>
+        <span class="timer" id="timer" style="display:none"></span>
+      </div>
+      <div class="btn-row" style="margin-top:0">
+        <button class="btn btn-danger btn-sm" id="btnRecord" onclick="startRec()">&#9679; Record</button>
+        <button class="btn btn-secondary btn-sm" id="btnStop" disabled onclick="stopRec()">&#9632; Stop</button>
+        <button class="btn btn-secondary btn-sm" id="btnTranscribe" disabled onclick="doTranscribe()">&#9654; Transcribe</button>
+      </div>
+      <audio id="audioPreview" controls></audio>
+      <div style="margin-top:.75rem;">
+        <label for="transcript">Transcript</label>
+        <textarea id="transcript" placeholder="Transcription appears here — or type/paste."></textarea>
+      </div>
+      <div class="error-box" id="voiceError"></div>
+    </div>
+  </div>
+
+  <!-- ── Step 3: Split ────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title"><span class="step-badge">3</span> Split the bill</div>
+    <div class="btn-row" style="margin-top:0">
+      <button class="btn btn-primary" id="btnSplit" onclick="doSplit()">Split Bill</button>
+      <button class="btn btn-secondary" id="btnLinks" disabled onclick="doLinks()">Create Payment Links</button>
+      <button class="btn btn-secondary" id="btnRefresh" disabled onclick="doReconcile()">&#8635; Refresh Status</button>
+    </div>
+    <div class="error-box" id="splitError"></div>
+  </div>
+
+  <!-- ── Step 4: Results ──────────────────────────────────────────────────── -->
+  <div class="card hidden" id="resultsCard">
+    <div class="card-title"><span class="step-badge">4</span> Results</div>
+
+    <div class="summary-row" id="summaryRow"></div>
+
+    <div style="overflow-x:auto; margin-top:1.25rem;">
+      <table id="resultsTable">
+        <thead>
+          <tr>
+            <th>Person</th>
+            <th>Items</th>
+            <th>Amount</th>
+            <th>Status</th>
+            <th>Payment link</th>
+            <th>Simulate Tikkie</th>
+          </tr>
+        </thead>
+        <tbody id="resultsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ── Step 5: Footnote JSON ────────────────────────────────────────────── -->
+  <div class="card hidden" id="footnoteCard">
+    <div class="card-title"><span class="step-badge">5</span> Payment footnote</div>
+    <p style="font-size:.82rem;color:#666;margin-bottom:.75rem;">
+      Live reconciliation against your bunq transaction history.
+      Click <strong>Refresh Status</strong> after simulating a payment.
+    </p>
+    <div class="json-block" id="footnoteJson"></div>
+  </div>
+
+</main>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+let splitData = null;
+let reconcileData = null;
+
+// ── Recording ─────────────────────────────────────────────────────────────────
+let mediaRecorder = null, chunks = [], timerInterval = null, seconds = 0, audioBlob = null;
+
+function setStatus(state, text) {
+  document.getElementById("dot").className = "dot " + state;
+  document.getElementById("statusText").textContent = text;
+}
+function showError(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.classList.add("visible");
+}
+function clearError(id) {
+  const el = document.getElementById(id);
+  el.textContent = "";
+  el.classList.remove("visible");
+}
+
+async function startRec() {
+  clearError("voiceError");
+  audioBlob = null;
+  document.getElementById("audioPreview").classList.remove("visible");
+  document.getElementById("btnTranscribe").disabled = true;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    chunks = [];
+    const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus"
+                   : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "";
+    mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    mediaRecorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      audioBlob = new Blob(chunks, { type: mediaRecorder.mimeType || "audio/webm" });
+      const url = URL.createObjectURL(audioBlob);
+      const preview = document.getElementById("audioPreview");
+      preview.src = url;
+      preview.classList.add("visible");
+      document.getElementById("btnTranscribe").disabled = false;
+      setStatus("ready", "Recording saved");
+    };
+    mediaRecorder.start(100);
+    seconds = 0;
+    document.getElementById("timer").style.display = "inline";
+    timerInterval = setInterval(() => {
+      seconds++;
+      const m = String(Math.floor(seconds / 60)).padStart(2, "0");
+      const s = String(seconds % 60).padStart(2, "0");
+      document.getElementById("timer").textContent = `${m}:${s}`;
+    }, 1000);
+    setStatus("recording", "Recording…");
+    document.getElementById("btnRecord").disabled = true;
+    document.getElementById("btnStop").disabled = false;
+  } catch (err) {
+    showError("voiceError", "Mic access denied: " + err.message);
+  }
+}
+
+function stopRec() {
+  if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+  clearInterval(timerInterval);
+  document.getElementById("timer").style.display = "none";
+  document.getElementById("btnStop").disabled = true;
+  document.getElementById("btnRecord").disabled = false;
+}
+
+async function doTranscribe() {
+  if (!audioBlob) return;
+  clearError("voiceError");
+  setStatus("loading", "Transcribing…");
+  document.getElementById("btnTranscribe").disabled = true;
+  const fd = new FormData();
+  fd.append("audio", audioBlob, "recording.webm");
+  try {
+    const res = await fetch("/api/transcribe", { method: "POST", body: fd });
+    const data = await res.json();
+    if (data.error) { showError("voiceError", data.error); setStatus("", "Error"); }
+    else { document.getElementById("transcript").value = data.transcript; setStatus("ready", "Transcribed"); }
+  } catch (err) {
+    showError("voiceError", "Network error: " + err.message);
+  } finally {
+    document.getElementById("btnTranscribe").disabled = false;
+  }
+}
+
+// ── OCR ───────────────────────────────────────────────────────────────────────
+async function runOcr() {
+  clearError("ocrError");
+  const file = document.getElementById("imageInput").files[0];
+  if (!file) { showError("ocrError", "Select an image first."); return; }
+  const btn = document.getElementById("btnOcr");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Extracting…';
+  const fd = new FormData();
+  fd.append("image", file);
+  try {
+    const res = await fetch("/api/ocr", { method: "POST", body: fd });
+    const data = await res.json();
+    if (data.error) showError("ocrError", data.error);
+    else document.getElementById("ocrText").value = data.ocr_text;
+  } catch (err) {
+    showError("ocrError", "Error: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Extract Text";
+  }
+}
+
+// ── Split ─────────────────────────────────────────────────────────────────────
+async function doSplit() {
+  clearError("splitError");
+  const ocr = document.getElementById("ocrText").value.trim();
+  const tr  = document.getElementById("transcript").value.trim();
+  if (!ocr || !tr) { showError("splitError", "Fill in both receipt text and transcript."); return; }
+  const btn = document.getElementById("btnSplit");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Splitting…';
+  try {
+    const res = await fetch("/api/split", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ocr_text: ocr, transcript: tr }),
+    });
+    const data = await res.json();
+    if (data.error) { showError("splitError", data.error); return; }
+    splitData = data;
+    renderResults(data, null);
+    document.getElementById("btnLinks").disabled = false;
+    document.getElementById("btnRefresh").disabled = false;
+    doReconcile();
+  } catch (err) {
+    showError("splitError", "Error: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Split Bill";
+  }
+}
+
+// ── Links ─────────────────────────────────────────────────────────────────────
+async function doLinks() {
+  clearError("splitError");
+  const btn = document.getElementById("btnLinks");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Creating…';
+  try {
+    const res = await fetch("/api/links", { method: "POST" });
+    const data = await res.json();
+    if (data.error) showError("splitError", data.error);
+    else { splitData = data; renderResults(data, reconcileData); }
+  } catch (err) {
+    showError("splitError", "Error: " + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Create Payment Links";
+  }
+}
+
+// ── Reconcile ─────────────────────────────────────────────────────────────────
+async function doReconcile() {
+  try {
+    const res = await fetch("/api/reconcile");
+    const data = await res.json();
+    if (!data.error) {
+      reconcileData = data;
+      renderResults(splitData, data);
+      renderFootnote(data);
+    }
+  } catch (_) {}
+}
+
+// ── Simulate Tikkie ───────────────────────────────────────────────────────────
+async function simulateTikkie(person, amount, btn) {
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const res = await fetch("/api/simulate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ person, amount }),
+    });
+    const data = await res.json();
+    if (data.error) { alert("Simulate error: " + data.error); return; }
+    btn.textContent = "✓ Sent";
+    btn.style.background = "#00c389";
+    setTimeout(() => doReconcile(), 1500);
+  } catch (err) {
+    alert("Error: " + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Render helpers ────────────────────────────────────────────────────────────
+const SELF_NAMES = new Set(["you", "me", "i"]);
+
+function renderResults(split, reconcile) {
+  if (!split) return;
+  document.getElementById("resultsCard").classList.remove("hidden");
+  document.getElementById("footnoteCard").classList.remove("hidden");
+
+  // Summary boxes
+  const total = split.total || 0;
+  const repaid = reconcile ? reconcile.total_repaid : 0;
+  const netCost = reconcile ? reconcile.net_cost : total;
+  const remaining = reconcile ? reconcile.remaining_owed : null;
+
+  document.getElementById("summaryRow").innerHTML = `
+    <div class="summary-box"><div class="label">You paid</div><div class="value">€${total.toFixed(2)}</div></div>
+    <div class="summary-box"><div class="label">Received back</div><div class="value">€${repaid.toFixed(2)}</div></div>
+    <div class="summary-box highlight"><div class="label">Net cost</div><div class="value">€${netCost.toFixed(2)}</div></div>
+    ${remaining !== null ? `<div class="summary-box"><div class="label">Still owed</div><div class="value">€${remaining.toFixed(2)}</div></div>` : ""}
+  `;
+
+  // Build payment status lookup
+  const statusMap = {};
+  if (reconcile && reconcile.payments) {
+    reconcile.payments.forEach(p => { statusMap[p.name] = p; });
+  }
+
+  const tbody = document.getElementById("resultsBody");
+  tbody.innerHTML = "";
+
+  split.people.forEach(person => {
+    const isSelf = SELF_NAMES.has(person.name.toLowerCase());
+    const rec = statusMap[person.name];
+
+    let badgeHtml;
+    if (isSelf) {
+      badgeHtml = `<span class="badge badge-self">Your share</span>`;
+    } else if (rec && rec.paid) {
+      badgeHtml = `<span class="badge badge-paid">✓ Paid ${rec.paid_at ? rec.paid_at.slice(0,10) : ""}</span>`;
+    } else {
+      badgeHtml = `<span class="badge badge-pending">⏳ Pending</span>`;
+    }
+
+    const itemsList = (person.items || []).map(i => `${i.name} €${Number(i.price).toFixed(2)}`).join(", ") || "—";
+    const url = person.bunqme_url;
+    const linkHtml = url ? `<a class="link-btn" href="${url}" target="_blank">🔗 Pay link</a>` : "—";
+
+    const simHtml = (!isSelf && !(rec && rec.paid))
+      ? `<button class="btn btn-sim" onclick="simulateTikkie('${person.name}', ${person.total_owed}, this)">▶ Simulate</button>`
+      : "—";
+
+    tbody.innerHTML += `
+      <tr>
+        <td><strong>${person.name}</strong></td>
+        <td style="color:#555;font-size:.82rem">${itemsList}</td>
+        <td><strong>€${Number(person.total_owed).toFixed(2)}</strong></td>
+        <td>${badgeHtml}</td>
+        <td>${linkHtml}</td>
+        <td>${simHtml}</td>
+      </tr>
+    `;
+  });
+}
+
+function renderFootnote(data) {
+  document.getElementById("footnoteCard").classList.remove("hidden");
+  document.getElementById("footnoteJson").innerHTML = syntaxHighlight(JSON.stringify(data, null, 2));
+}
+
+function syntaxHighlight(json) {
+  return json
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, match => {
+      if (/^"/.test(match)) {
+        return /:$/.test(match)
+          ? `<span class="json-key">${match}</span>`
+          : `<span class="json-str">${match}</span>`;
+      }
+      if (/true/.test(match))  return `<span class="json-bool-t">${match}</span>`;
+      if (/false/.test(match)) return `<span class="json-bool-f">${match}</span>`;
+      if (/null/.test(match))  return `<span class="json-null">${match}</span>`;
+      return `<span class="json-num">${match}</span>`;
+    });
+}
+</script>
+</body>
+</html>

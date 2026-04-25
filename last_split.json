@@ -1,0 +1,29 @@
+{
+  "people": [
+    {
+      "name": "You",
+      "items": [],
+      "subtotal": 20.0,
+      "tax_share": 0.0,
+      "tip_share": 0.0,
+      "total_owed": 20.0,
+      "bunqme_url": null,
+      "payment_status": "pending"
+    },
+    {
+      "name": "Sarah",
+      "items": [],
+      "subtotal": 10.0,
+      "tax_share": 0.0,
+      "tip_share": 0.0,
+      "total_owed": 10.0,
+      "bunqme_url": null,
+      "payment_status": "pending"
+    }
+  ],
+  "unassigned": [],
+  "total": 30.0,
+  "tax": 0.0,
+  "tip": 0.0,
+  "status": "review"
+}

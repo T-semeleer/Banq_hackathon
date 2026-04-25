@@ -1,6 +1,12 @@
 """Run all test receipts through the OCR pipeline and print results."""
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock
+
+# Mock AWS/imaging deps so this module imports without boto3/Pillow installed
+for _m in ("boto3", "PIL", "PIL.Image"):
+    if _m not in sys.modules:
+        sys.modules[_m] = MagicMock()
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
