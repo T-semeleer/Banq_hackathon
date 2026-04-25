@@ -33,7 +33,7 @@ DEMO_EXPENSES: list[dict] = [
         "description": "Albert Heijn Boodschappen",
         "amount": "34.20",
         "category": "GROCERIES",
-        "label": "Shared groceries",
+        "label": "Weekly groceries",
     },
     {
         "description": "NS Trein Amsterdam CS",
@@ -58,6 +58,60 @@ DEMO_EXPENSES: list[dict] = [
         "amount": "29.99",
         "category": "BILLS_AND_UTILITIES",
         "label": "Phone bill",
+    },
+    {
+        "description": "Jumbo Supermarkt",
+        "amount": "41.75",
+        "category": "GROCERIES",
+        "label": "Mid-week groceries",
+    },
+    {
+        "description": "GVB Maandkaart OV",
+        "amount": "98.00",
+        "category": "TRANSPORT",
+        "label": "Monthly transit pass",
+    },
+    {
+        "description": "Café Brouwerij 't IJ",
+        "amount": "18.50",
+        "category": "FOOD_AND_DRINK",
+        "label": "Drinks with colleagues",
+    },
+    {
+        "description": "Spotify Premium",
+        "amount": "10.99",
+        "category": "ENTERTAINMENT",
+        "label": "Music subscription",
+    },
+    {
+        "description": "H&M Amsterdam",
+        "amount": "54.95",
+        "category": "SHOPPING",
+        "label": "Clothing",
+    },
+    {
+        "description": "Thuisbezorgd.nl",
+        "amount": "32.80",
+        "category": "FOOD_AND_DRINK",
+        "label": "Takeaway delivery",
+    },
+    {
+        "description": "Eneco Energie",
+        "amount": "87.50",
+        "category": "BILLS_AND_UTILITIES",
+        "label": "Energy bill",
+    },
+    {
+        "description": "Coolblue",
+        "amount": "149.00",
+        "category": "SHOPPING",
+        "label": "Electronics",
+    },
+    {
+        "description": "Bagels & Beans",
+        "amount": "11.40",
+        "category": "FOOD_AND_DRINK",
+        "label": "Lunch",
     },
 ]
 

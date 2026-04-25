@@ -4,133 +4,100 @@
       "name": "You",
       "items": [
         {
-          "name": "APPLE",
-          "price": 0.5
-        },
-        {
-          "name": "BANANA",
-          "price": 0.75
-        },
-        {
-          "name": "ORANGE",
-          "price": 0.6
-        },
-        {
-          "name": "PEAR",
-          "price": 0.38
-        },
-        {
-          "name": "GRAPES",
-          "price": 1.5
-        },
-        {
-          "name": "STRAWBERRY",
-          "price": 1.25
-        },
-        {
-          "name": "BLUEBERRY",
+          "name": "Apple",
           "price": 1.0
         },
         {
-          "name": "KIWI",
-          "price": 0.9
-        },
-        {
-          "name": "WATERMELON",
-          "price": 2.25
-        },
-        {
-          "name": "LEMON",
-          "price": 0.3
-        },
-        {
-          "name": "RASPBERRY",
+          "name": "Banana",
           "price": 1.5
         },
         {
-          "name": "MILK",
+          "name": "Orange",
+          "price": 1.2
+        },
+        {
+          "name": "Pear",
           "price": 0.75
         },
         {
-          "name": "CHEESE",
-          "price": 1.4
+          "name": "Grapes (shared)",
+          "price": 1.5
         },
         {
-          "name": "YOGURT",
-          "price": 0.6
+          "name": "Yogurt (shared)",
+          "price": 0.4
         }
       ],
-      "subtotal": 13.68,
+      "subtotal": 6.35,
       "tax_share": 0.0,
       "tip_share": 0.0,
-      "total_owed": 13.68,
+      "total_owed": 6.35,
       "bunqme_url": null,
       "payment_status": "pending"
     },
     {
-      "name": "Person 2",
+      "name": "Terence",
       "items": [
         {
-          "name": "APPLE",
-          "price": 0.5
-        },
-        {
-          "name": "BANANA",
-          "price": 0.75
-        },
-        {
-          "name": "ORANGE",
-          "price": 0.6
-        },
-        {
-          "name": "PEAR",
-          "price": 0.37
-        },
-        {
-          "name": "GRAPES",
+          "name": "Grapes (shared)",
           "price": 1.5
         },
         {
-          "name": "STRAWBERRY",
-          "price": 1.25
+          "name": "Strawberry",
+          "price": 2.5
         },
         {
-          "name": "BLUEBERRY",
-          "price": 1.0
+          "name": "Blueberry",
+          "price": 2.0
         },
         {
-          "name": "KIWI",
-          "price": 0.9
+          "name": "Kiwi",
+          "price": 1.8
         },
         {
-          "name": "WATERMELON",
-          "price": 2.25
+          "name": "Watermelon",
+          "price": 4.5
         },
         {
-          "name": "LEMON",
-          "price": 0.3
-        },
-        {
-          "name": "RASPBERRY",
-          "price": 1.5
-        },
-        {
-          "name": "MILK",
-          "price": 0.75
-        },
-        {
-          "name": "CHEESE",
-          "price": 1.4
-        },
-        {
-          "name": "YOGURT",
-          "price": 0.6
+          "name": "Yogurt (shared)",
+          "price": 0.4
         }
       ],
-      "subtotal": 13.67,
+      "subtotal": 12.7,
       "tax_share": 0.0,
       "tip_share": 0.0,
-      "total_owed": 13.67,
+      "total_owed": 12.7,
+      "bunqme_url": null,
+      "payment_status": "pending"
+    },
+    {
+      "name": "Noah",
+      "items": [
+        {
+          "name": "Lemon",
+          "price": 0.6
+        },
+        {
+          "name": "Raspberry",
+          "price": 3.0
+        },
+        {
+          "name": "Milk",
+          "price": 1.5
+        },
+        {
+          "name": "Cheese",
+          "price": 2.8
+        },
+        {
+          "name": "Yogurt (shared)",
+          "price": 0.4
+        }
+      ],
+      "subtotal": 8.3,
+      "tax_share": 0.0,
+      "tip_share": 0.0,
+      "total_owed": 8.3,
       "bunqme_url": null,
       "payment_status": "pending"
     }

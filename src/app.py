@@ -240,13 +240,23 @@ def reconcile_status():
         status = reconcile(client, account_id, _state["split_result"])
         # Persist this reconcile result to disk (upsert by expense_transaction_id)
         exp_id = _state.get("expense_transaction_id")
+        original_total = status.get("original_total")
         footnote = {**status, "expense_transaction_id": exp_id}
         footnotes = _load_footnotes()
-        existing = next(
-            (i for i, f in enumerate(footnotes)
-             if f.get("expense_transaction_id") == exp_id),
-            None,
-        )
+        # Upsert: match by expense_transaction_id when set, else by original_total
+        if exp_id is not None:
+            existing = next(
+                (i for i, f in enumerate(footnotes)
+                 if f.get("expense_transaction_id") == exp_id),
+                None,
+            )
+        else:
+            existing = next(
+                (i for i, f in enumerate(footnotes)
+                 if f.get("expense_transaction_id") is None
+                 and f.get("original_total") == original_total),
+                None,
+            )
         if existing is not None:
             footnotes[existing] = footnote
         else:

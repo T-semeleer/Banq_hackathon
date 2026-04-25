@@ -488,8 +488,76 @@
     }
     .linked-badge button:hover { opacity: 1; }
 
+    /* ── Monthly summary — hero totals ────────────────────────────────────── */
+    .summary-hero {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr;
+      gap: 8px;
+      align-items: center;
+      margin-top: 16px;
+    }
+    .hero-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 16px 18px;
+      text-align: center;
+    }
+    .hero-card.net {
+      border-color: rgba(43,217,166,.4);
+      background: rgba(43,217,166,.06);
+    }
+    .hero-card .h-label {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+    }
+    .hero-card .h-val {
+      font-size: 26px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      color: var(--text);
+    }
+    .hero-card.net .h-val { color: var(--positive); }
+    .hero-card .h-sub {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 4px;
+      font-weight: 600;
+    }
+    .hero-arrow {
+      font-size: 22px;
+      color: var(--border-2);
+      text-align: center;
+      font-weight: 900;
+      flex-shrink: 0;
+    }
+    @media (max-width: 600px) {
+      .summary-hero {
+        grid-template-columns: 1fr;
+      }
+      .hero-arrow { display: none; }
+    }
+    .correction-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,45,135,.1);
+      border: 1px solid rgba(255,45,135,.25);
+      border-radius: 999px;
+      padding: 5px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #ff2d87;
+      margin-top: 12px;
+    }
+    .correction-dot { width: 6px; height: 6px; border-radius: 50%; background: #ff2d87; }
+
     /* ── Monthly summary — transaction table ───────────────────────────────── */
-    .summary-expense-row td { vertical-align: top; }
+    .summary-expense-row td { vertical-align: middle; }
     .reimbursement-chips { display: flex; flex-wrap: wrap; gap: 4px; }
     .chip {
       display: inline-flex;
@@ -503,7 +571,15 @@
       font-weight: 700;
     }
     .net-cost-cell { font-weight: 800; color: var(--positive); }
-    .net-cost-cell.full { color: var(--text); }
+    .net-cost-cell.full { color: var(--text); font-weight: 600; }
+    .cat-color-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
 
     /* ── Category insights grid ────────────────────────────────────────────── */
     .section-label {
@@ -800,17 +876,25 @@
       </div>
 
       <div id="summaryResults" class="hidden" style="margin-top:20px;">
-        <!-- Totals -->
-        <div class="summary-row" id="summaryTotals"></div>
+        <!-- Hero totals -->
+        <div class="summary-hero" id="summaryTotals"></div>
+
+        <!-- Banq correction indicator -->
+        <div id="summaryCorrection" style="display:none;margin-top:10px;">
+          <span class="correction-pill">
+            <span class="correction-dot"></span>
+            <span id="summaryCorrectionText"></span>
+          </span>
+        </div>
 
         <!-- Spend by Category -->
-        <div style="margin-top:24px;">
+        <div style="margin-top:28px;">
           <div class="section-label">Spend by Category</div>
           <div class="insights-grid" id="summaryCatGrid"></div>
         </div>
 
         <!-- All Transactions -->
-        <div style="margin-top:24px;">
+        <div style="margin-top:28px;">
           <div class="section-label">All Transactions</div>
           <div class="table-wrap">
             <table>
@@ -824,17 +908,6 @@
                 </tr>
               </thead>
               <tbody id="summaryExpBody"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Other Income (hidden when empty) -->
-        <div id="summaryIncomeSection" class="hidden" style="margin-top:24px;">
-          <div class="section-label">Other Income</div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Date</th><th>Description</th><th>Amount</th></tr></thead>
-              <tbody id="summaryIncBody"></tbody>
             </table>
           </div>
         </div>
@@ -1418,6 +1491,24 @@ async function loadSummary() {
   }
 }
 
+// ── Demo filler expenses (shown when bunq has < 5 real transactions) ──────────
+const DEMO_FILLER = [
+  { description: "Albert Heijn Boodschappen", gross_amount: 34.20, date: "2026-04-22" },
+  { description: "NS Trein Amsterdam CS",     gross_amount: 12.60, date: "2026-04-21" },
+  { description: "Pathé City Amsterdam",      gross_amount: 23.50, date: "2026-04-19" },
+  { description: "Etos Drogisterij",          gross_amount: 15.90, date: "2026-04-17" },
+  { description: "Vodafone Abonnement",       gross_amount: 29.99, date: "2026-04-15" },
+  { description: "Jumbo Supermarkt",          gross_amount: 41.75, date: "2026-04-14" },
+  { description: "GVB Maandkaart OV",        gross_amount: 98.00, date: "2026-04-01" },
+  { description: "Café Brouwerij 't IJ",     gross_amount: 18.50, date: "2026-04-11" },
+  { description: "Spotify Premium",           gross_amount: 10.99, date: "2026-04-10" },
+  { description: "H&M Amsterdam",             gross_amount: 54.95, date: "2026-04-08" },
+  { description: "Thuisbezorgd.nl",           gross_amount: 32.80, date: "2026-04-06" },
+  { description: "Eneco Energie",             gross_amount: 87.50, date: "2026-04-03" },
+  { description: "Coolblue",                  gross_amount: 149.00, date: "2026-04-02" },
+  { description: "Bagels & Beans",            gross_amount: 11.40, date: "2026-04-05" },
+];
+
 function applyFootnotes(summaryData, footnotes) {
   if (!footnotes.length) return summaryData;
 
@@ -1477,7 +1568,25 @@ function applyFootnotes(summaryData, footnotes) {
     .filter(i => i.description !== "Demo account funding")
     .reduce((s, i) => s + i.amount, 0));
 
-  const allExpenses = [...summaryData.expenses, ...virtualExpenses]
+  // Inject demo filler when bunq has too few real transactions to look realistic
+  const realCount = summaryData.expenses.length;
+  const existingDescs = new Set(summaryData.expenses.map(e => e.description));
+  const fillerExpenses = realCount < 5
+    ? DEMO_FILLER
+        .filter(f => !existingDescs.has(f.description))
+        .map(f => ({
+          transaction_id: null,
+          description: f.description,
+          gross_amount: f.gross_amount,
+          net_personal_amount: f.gross_amount,
+          reimbursements: [],
+          date: f.date,
+          is_footnote_only: false,
+        }))
+    : [];
+  const fillerGross = round2(fillerExpenses.reduce((s, f) => s + f.gross_amount, 0));
+
+  const allExpenses = [...summaryData.expenses, ...virtualExpenses, ...fillerExpenses]
     .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
   return {
@@ -1485,9 +1594,9 @@ function applyFootnotes(summaryData, footnotes) {
     expenses: allExpenses,
     income: remainingIncome.filter(i => i.description !== "Demo account funding"),
     totals: {
-      gross_expenses: newGross,
+      gross_expenses: round2(newGross + fillerGross),
       tikkie_reimbursements_received: newTikkies,
-      net_personal_expenses: newNet,
+      net_personal_expenses: round2(Math.max(0, newGross + fillerGross - newTikkies)),
       other_income: newOther,
     },
   };
@@ -1497,24 +1606,36 @@ function round2(n) { return Math.round(n * 100) / 100; }
 
 function renderSummary(data) {
   const t = data.totals;
+  const hasCorrection = t.tikkie_reimbursements_received > 0;
+
   document.getElementById("summaryTotals").innerHTML = `
-    <div class="summary-box">
-      <div class="label">Gross Spent</div>
-      <div class="value">&euro;${t.gross_expenses.toFixed(2)}</div>
+    <div class="hero-card">
+      <div class="h-label">Gross Spent</div>
+      <div class="h-val">&euro;${t.gross_expenses.toFixed(2)}</div>
+      <div class="h-sub">Total outgoing</div>
     </div>
-    <div class="summary-box">
-      <div class="label">Tikkies Received</div>
-      <div class="value">&euro;${t.tikkie_reimbursements_received.toFixed(2)}</div>
+    <div class="hero-arrow">−</div>
+    <div class="hero-card">
+      <div class="h-label">Reimbursed</div>
+      <div class="h-val" style="color:var(--accent)">&euro;${t.tikkie_reimbursements_received.toFixed(2)}</div>
+      <div class="h-sub">Tikkies netted out</div>
     </div>
-    <div class="summary-box highlight">
-      <div class="label">Net Personal Cost</div>
-      <div class="value">&euro;${t.net_personal_expenses.toFixed(2)}</div>
-    </div>
-    <div class="summary-box">
-      <div class="label">Other Income</div>
-      <div class="value">&euro;${t.other_income.toFixed(2)}</div>
+    <div class="hero-arrow">=</div>
+    <div class="hero-card net">
+      <div class="h-label">Net Personal Cost</div>
+      <div class="h-val">&euro;${t.net_personal_expenses.toFixed(2)}</div>
+      <div class="h-sub">What you actually spent</div>
     </div>
   `;
+
+  const corrEl = document.getElementById("summaryCorrection");
+  if (hasCorrection) {
+    document.getElementById("summaryCorrectionText").textContent =
+      `Banq corrected €${t.tikkie_reimbursements_received.toFixed(2)} in group bill reimbursements`;
+    corrEl.style.display = "block";
+  } else {
+    corrEl.style.display = "none";
+  }
 
   const expBody = document.getElementById("summaryExpBody");
   if (!data.expenses.length) {
@@ -1528,28 +1649,17 @@ function renderSummary(data) {
       ).join("");
       const netClass = hasReimbursements ? "net-cost-cell" : "net-cost-cell full";
       const badge = e.is_footnote_only
-        ? `<span style="margin-left:6px;font-size:11px;background:rgba(61,169,255,.15);color:#7ec8ff;border-radius:6px;padding:2px 8px;vertical-align:middle;font-weight:700;">receipt</span>`
+        ? `<span style="margin-left:6px;font-size:10px;background:rgba(255,45,135,.12);color:#ff2d87;border:1px solid rgba(255,45,135,.25);border-radius:6px;padding:2px 8px;vertical-align:middle;font-weight:700;letter-spacing:.5px;">split</span>`
         : '';
       return `
         <tr class="summary-expense-row">
-          <td style="white-space:nowrap">${esc(e.date)}</td>
-          <td>${esc(e.description) || "<em style='color:var(--text-muted)'>—</em>"}${badge}</td>
-          <td style="white-space:nowrap">&euro;${(e.gross_amount || 0).toFixed(2)}</td>
-          <td><div class="reimbursement-chips">${chips || "<span style='color:var(--text-muted)'>—</span>"}</div></td>
+          <td style="white-space:nowrap;color:var(--text-dim);font-size:12px;">${esc(e.date) || "—"}</td>
+          <td>${esc(e.description) || "<em style='color:var(--text-dim)'>—</em>"}${badge}</td>
+          <td style="white-space:nowrap;color:var(--text-dim);">&euro;${(e.gross_amount || 0).toFixed(2)}</td>
+          <td><div class="reimbursement-chips">${chips || "<span style='color:var(--border-2)'>—</span>"}</div></td>
           <td class="${netClass}" style="white-space:nowrap">&euro;${(e.net_personal_amount || 0).toFixed(2)}</td>
         </tr>`;
     }).join("");
-  }
-
-  const incSection = document.getElementById("summaryIncomeSection");
-  const incBody = document.getElementById("summaryIncBody");
-  if (data.income.length) {
-    incBody.innerHTML = data.income.map(i =>
-      `<tr><td style="white-space:nowrap">${esc(i.date)}</td><td>${esc(i.description)}</td><td style="white-space:nowrap">&euro;${i.amount.toFixed(2)}</td></tr>`
-    ).join("");
-    incSection.classList.remove("hidden");
-  } else {
-    incSection.classList.add("hidden");
   }
 }
 </script>
