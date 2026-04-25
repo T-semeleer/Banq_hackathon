@@ -23,6 +23,8 @@ Your job is to:
 Rules:
 - "I" or "me" in the transcript refers to the person who recorded the memo — call them "You"
 - Items mentioned without a clear owner go to "unassigned"
+- If the transcript says "split evenly", "split equally", "divide equally", or similar with no names, split everything equally between "You" and "Person 2"
+- If the transcript says "split X ways" or "between N people" with no names, create N people: "You", "Person 2", "Person 3", etc. and split all items equally
 - If a price is not explicitly on the receipt, estimate 0.00
 - Always output valid JSON, no explanatory text outside the JSON block
 - Output compact JSON (no extra whitespace or indentation)

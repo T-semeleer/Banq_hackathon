@@ -785,23 +785,10 @@
     </div>
   </div>
 
-  <!-- ── Step 5: Footnote ─────────────────────────────────────────────────── -->
-  <div class="step hidden" id="footnoteCard">
-    <div class="step-head">
-      <div class="step-num">5</div>
-      <div class="step-title">Payment footnote</div>
-      <div class="step-subtitle">Reconciliation</div>
-    </div>
-    <div class="step-body">
-      <p class="step-desc">Live reconciliation against your bunq transaction history. Click <strong style="color:var(--text)">Refresh Status</strong> after simulating a payment.</p>
-      <div class="json-block" id="footnoteJson"></div>
-    </div>
-  </div>
-
   <!-- ── Step 6: Monthly Summary ──────────────────────────────────────────── -->
   <div class="step active" id="monthlySummaryCard">
     <div class="step-head">
-      <div class="step-num">6</div>
+      <div class="step-num">5</div>
       <div class="step-title">Monthly Summary</div>
       <div class="step-subtitle">Insights</div>
     </div>
@@ -1249,7 +1236,6 @@ function initials(name) {
 function renderResults(split, reconcile) {
   if (!split) return;
   document.getElementById("resultsCard").classList.remove("hidden");
-  document.getElementById("footnoteCard").classList.remove("hidden");
 
   // Summary boxes
   const total = split.total || 0;
@@ -1314,8 +1300,7 @@ function renderResults(split, reconcile) {
 }
 
 function renderFootnote(data) {
-  document.getElementById("footnoteCard").classList.remove("hidden");
-  document.getElementById("footnoteJson").innerHTML = syntaxHighlight(JSON.stringify(data, null, 2));
+  // footnote card removed from UI — data still used by monthly summary
 }
 
 function syntaxHighlight(json) {

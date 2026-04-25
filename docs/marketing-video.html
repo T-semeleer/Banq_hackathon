@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Banq — SplitBill for bunq</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Maven+Pro:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: "Maven Pro", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+.stage {
+  position: relative;
+  width: min(100vw, calc(100vh * 16/9));
+  aspect-ratio: 16/9;
+  background: #0b0b0d;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+/* Ambient glow layer */
+.stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 40% at 20% 50%, rgba(255,45,135,.04) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 40% at 80% 50%, rgba(43,217,166,.04) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Rainbow bars ──────────────────────────────────────────────────────── */
+.rainbow {
+  position: absolute;
+  left: 0; right: 0;
+  height: 3px;
+  z-index: 50;
+  background: linear-gradient(90deg, #ff2d87, #ff5a3d, #ffb84d, #ffe14d, #2bd9a6, #3da9ff, #a056ff);
+}
+.rainbow.top    { top: 0; }
+.rainbow.bottom { bottom: 28px; }
+
+/* ── Scenes ─────────────────────────────────────────────────────────────── */
+.scene {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.65s ease;
+  pointer-events: none;
+  z-index: 1;
+  padding: 5% 7%;
+}
+.scene.active { opacity: 1; pointer-events: auto; }
+
+/* ── Progress bar ────────────────────────────────────────────────────────── */
+.progress-track {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 28px;
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(6px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 10px;
+}
+.progress-bar-wrap {
+  flex: 1;
+  height: 3px;
+  background: rgba(255,255,255,.1);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff2d87, #a056ff);
+  width: 0%;
+  transition: width 0.2s linear;
+  border-radius: 999px;
+}
+.ctrl-btn {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,.5);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color .15s, background .15s;
+  white-space: nowrap;
+}
+.ctrl-btn:hover { color: #fff; background: rgba(255,255,255,.08); }
+.scene-counter { color: rgba(255,255,255,.3); font-size: 11px; font-weight: 700; white-space: nowrap; }
+
+.scene-dots { display: flex; gap: 5px; align-items: center; }
+.scene-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.2);
+  cursor: pointer;
+  transition: background .25s, transform .25s;
+}
+.scene-dot.active { background: #ff2d87; transform: scale(1.5); }
+
+/* ── Typography utilities ────────────────────────────────────────────────── */
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes pop {
+  0%   { opacity: 0; transform: scale(.88); }
+  70%  { transform: scale(1.04); }
+  100% { opacity: 1; transform: scale(1); }
+}
+@keyframes slideLeft {
+  from { opacity: 0; transform: translateX(30px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideRight {
+  from { opacity: 0; transform: translateX(-30px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.35 } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes barGrow {
+  from { width: 0%; }
+}
+
+.eyebrow {
+  font-size: clamp(9px, 1.1vw, 13px);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 2.5px;
+  color: rgba(255,255,255,.4);
+}
+.eyebrow.accent   { color: #ff2d87; }
+.eyebrow.positive { color: #2bd9a6; }
+.eyebrow.blue     { color: #3da9ff; }
+.eyebrow.orange   { color: #ffb84d; }
+
+.grad-text {
+  background: linear-gradient(135deg, #ff2d87 0%, #a056ff 60%, #3da9ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.grad-text-green {
+  background: linear-gradient(135deg, #2bd9a6, #3da9ff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SCENE 1 — TITLE
+════════════════════════════════════════════════════════════════════════════ */
+#s1 { gap: 10px; }
+
+.s1-logo {
+  font-size: clamp(72px, 11vw, 140px);
+  font-weight: 900;
+  letter-spacing: -4px;
+  line-height: 1;
+  color: #fff;
+  opacity: 0;
+}
+.s1-logo .dot { color: #ff2d87; }
+.scene.active .s1-logo { animation: pop .8s .2s cubic-bezier(.2,.8,.2,1) forwards; }
+
+.s1-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 999px;
+  padding: 7px 18px;
+  opacity: 0;
+}
+.scene.active .s1-pill { animation: fadeIn .6s .9s forwards; }
+.s1-pill-text {
+  font-size: clamp(11px, 1.4vw, 17px);
+  font-weight: 700;
+  color: rgba(255,255,255,.7);
+  letter-spacing: 0.5px;
+}
+.s1-pill-dot { width: 6px; height: 6px; border-radius: 50%; background: #ff2d87; animation: pulse 1.2s infinite; }
+
+.s1-tagline {
+  font-size: clamp(13px, 1.7vw, 21px);
+  font-weight: 600;
+  color: rgba(255,255,255,.5);
+  opacity: 0;
+  text-align: center;
+  max-width: 55%;
+  line-height: 1.5;
+}
+.scene.active .s1-tagline { animation: fadeIn .6s 1.4s forwards; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SCENE 2 — THE PROBLEM
+════════════════════════════════════════════════════════════════════════════ */
+#s2 { gap: 20px; }
+
+.s2-headline {
+  font-size: clamp(22px, 3.8vw, 50px);
+  font-weight: 900;
+  letter-spacing: -1.5px;
+  text-align: center;
+  line-height: 1.05;
+  opacity: 0;
+}
+.scene.active .s2-headline { animation: riseIn .6s .2s forwards; }
+
+.s2-grid {
+  display: grid;
+  grid-template-columns: 1fr 56px 1fr;
+  gap: 0;
+  width: 100%;
+  align-items: center;
+  opacity: 0;
+}
+.scene.active .s2-grid { animation: fadeIn .5s .7s forwards; }
+
+.s2-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bank-card {
+  background: #16161a;
+  border: 1px solid #2a2a30;
+  border-radius: 14px;
+  padding: 12px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: clamp(10px, 1.3vw, 16px);
+}
+.bank-card.bad  { border-color: rgba(255,77,106,.3); }
+.bank-card.good { border-color: rgba(43,217,166,.3); }
+
+.bc-label { color: rgba(255,255,255,.5); font-weight: 600; }
+.bc-val { font-weight: 900; }
+.bc-val.red    { color: #ff4d6a; }
+.bc-val.green  { color: #2bd9a6; }
+.bc-val.strike { color: rgba(255,255,255,.25); text-decoration: line-through; }
+
+.col-label {
+  font-size: clamp(9px, 1vw, 12px);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  text-align: center;
+  padding: 7px 12px;
+  border-radius: 8px;
+  margin-bottom: 4px;
+}
+.col-label.bad  { background: rgba(255,77,106,.12); color: #ff4d6a; }
+.col-label.good { background: rgba(43,217,166,.12); color: #2bd9a6; }
+
+.vs-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.vs-line-v { width: 1px; height: 30px; background: #2a2a30; }
+.vs-txt {
+  font-size: clamp(10px, 1.3vw, 16px);
+  font-weight: 900;
+  color: #ff2d87;
+  background: #0b0b0d;
+  border: 1px solid rgba(255,45,135,.3);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+
+.verdict-row {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  opacity: 0;
+}
+.scene.active .verdict-row { animation: riseIn .5s 1.4s forwards; }
+.verdict-box {
+  flex: 1;
+  text-align: center;
+  padding: 12px;
+  border-radius: 14px;
+  font-size: clamp(10px, 1.4vw, 17px);
+  font-weight: 800;
+  line-height: 1.3;
+}
+.verdict-box.bad  { background: rgba(255,77,106,.1); color: #ff4d6a; border: 1px solid rgba(255,77,106,.2); }
+.verdict-box.good { background: rgba(43,217,166,.1); color: #2bd9a6; border: 1px solid rgba(43,217,166,.2); }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SCENE 3 — RECEIPT SCAN
+════════════════════════════════════════════════════════════════════════════ */
+#s3 { flex-direction: row; gap: 6%; }
+
+.s3-left { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 16px; }
+.s3-h {
+  font-size: clamp(22px, 3.2vw, 42px);
+  font-weight: 900;
+  letter-spacing: -1px;
+  line-height: 1.1;
+  color: #fff;
+  opacity: 0;
+}
+.scene.active .s3-h { animation: riseIn .5s .3s forwards; }
+.s3-p {
+  font-size: clamp(10px, 1.3vw, 16px);
+  color: rgba(255,255,255,.45);
+  line-height: 1.65;
+  font-weight: 600;
+  opacity: 0;
+  max-width: 90%;
+}
+.scene.active .s3-p { animation: riseIn .5s .7s forwards; }
+.s3-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,45,135,.1);
+  border: 1px solid rgba(255,45,135,.25);
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: clamp(9px, 1.1vw, 13px);
+  font-weight: 700;
+  color: #ff2d87;
+  width: fit-content;
+  opacity: 0;
+}
+.scene.active .s3-badge { animation: riseIn .5s 1.1s forwards; }
+.badge-pulse { width: 7px; height: 7px; border-radius: 50%; background: #ff2d87; animation: pulse 1s infinite; }
+
+.receipt-wrap {
+  width: clamp(130px, 22%, 200px);
+  position: relative;
+  flex-shrink: 0;
+  opacity: 0;
+}
+.scene.active .receipt-wrap { animation: pop .6s .2s forwards; }
+
+/* Receipt paper with zig-zag edges */
+.receipt-paper-top {
+  height: 10px;
+  background:
+    linear-gradient(135deg, #1a1a1f 25%, transparent 25%) 0 0/16px 10px,
+    linear-gradient(225deg, #1a1a1f 25%, transparent 25%) 0 0/16px 10px;
+}
+.receipt-body {
+  background: #1a1a1f;
+  border-left: 1px solid #2a2a30;
+  border-right: 1px solid #2a2a30;
+  padding: 14px 14px 18px;
+  position: relative;
+  overflow: hidden;
+  font-family: "JetBrains Mono", monospace;
+  font-size: clamp(6px, 0.8vw, 10px);
+  color: rgba(255,255,255,.85);
+  line-height: 1.7;
+  box-shadow: 0 20px 60px rgba(0,0,0,.7), 0 4px 16px rgba(0,0,0,.5);
+}
+.receipt-paper-bot {
+  height: 10px;
+  background:
+    linear-gradient(45deg, #1a1a1f 25%, transparent 25%) 0 0/16px 10px,
+    linear-gradient(-45deg, #1a1a1f 25%, transparent 25%) 0 0/16px 10px;
+  box-shadow: 0 20px 40px rgba(0,0,0,.4);
+}
+.r-head { text-align: center; border-bottom: 1px dashed rgba(255,255,255,.2); padding-bottom: 8px; margin-bottom: 8px; }
+.r-name { font-family: "Maven Pro", sans-serif; font-weight: 900; font-size: 1.4em; letter-spacing: 3px; color: #fff; }
+.r-sub  { font-size: .85em; color: rgba(255,255,255,.4); }
+.r-row  { display: flex; justify-content: space-between; gap: 4px; }
+.r-row .r-l { color: rgba(255,255,255,.75); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r-row .r-r { color: rgba(255,255,255,.75); white-space: nowrap; font-weight: 700; }
+.r-div  { border-top: 1px dashed rgba(255,255,255,.15); margin: 6px 0; }
+.r-div.solid { border-top: 1px solid rgba(255,255,255,.3); }
+.r-total .r-l { font-weight: 700; color: #fff; }
+.r-total .r-r { font-weight: 700; color: #2bd9a6; }
+
+.scan-line {
+  position: absolute;
+  left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,45,135,.9) 50%, transparent 100%);
+  box-shadow: 0 0 16px 6px rgba(255,45,135,.5);
+  top: -3px;
+}
+.scene.active .scan-line { animation: scanDown 2.2s .7s ease-in-out 3; }
+@keyframes scanDown {
+  0%   { top: -3px; opacity: 1; }
+  85%  { top: 100%; opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SCENE 4 — AI SPLIT
+════════════════════════════════════════════════════════════════════════════ */
+#s4 { gap: 16px; }
+
+.s4-top { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; opacity: 0; }
+.scene.active .s4-top { animation: riseIn .5s .2s forwards; }
+.s4-h { font-size: clamp(18px, 2.8vw, 36px); font-weight: 900; letter-spacing: -0.8px; }
+
+.voice-quote {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: #16161a;
+  border: 1px solid #2a2a30;
+  border-left: 3px solid #ff2d87;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: clamp(9px, 1.1vw, 13px);
+  color: rgba(255,255,255,.6);
+  font-weight: 600;
+  font-style: italic;
+  width: 100%;
+  opacity: 0;
+}
+.scene.active .voice-quote { animation: riseIn .4s .7s forwards; }
+.mic-icon { font-size: 1.3em; flex-shrink: 0; }
+
+.split-table { width: 100%; border-collapse: collapse; font-size: clamp(9px, 1.15vw, 14px); }
+.split-table th {
+  background: rgba(255,255,255,.04);
+  padding: 8px 12px;
+  text-align: left;
+  font-size: clamp(7px, .85vw, 10px);
+  font-weight: 800;
+  color: rgba(255,255,255,.3);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+}
+.split-table th:first-child { border-radius: 8px 0 0 8px; }
+.split-table th:last-child  { border-radius: 0 8px 8px 0; }
+.split-table td { padding: 10px 12px; border-top: 1px solid rgba(255,255,255,.05); color: #fff; vertical-align: middle; }
+.split-table tr { opacity: 0; }
+.scene.active .split-table tr:nth-child(1) { animation: riseIn .35s .9s forwards; }
+.scene.active .split-table tr:nth-child(2) { animation: riseIn .35s 1.15s forwards; }
+.scene.active .split-table tr:nth-child(3) { animation: riseIn .35s 1.4s forwards; }
+.scene.active .split-table tr:nth-child(4) { animation: riseIn .35s 1.65s forwards; }
+
+.avatar-s {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 900;
+  color: #0b0b0d;
+  margin-right: 8px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.badge-pill {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: clamp(7px, .85vw, 10px);
+  font-weight: 800;
+  white-space: nowrap;
+}
+.b-you     { background: rgba(160,86,255,.18); color: #c490ff; }
+.b-pending { background: rgba(255,184,77,.15);  color: #ffb84d; }
+.b-paid    { background: rgba(43,217,166,.15);  color: #2bd9a6; }
+
+.ai-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(160,86,255,.08);
+  border: 1px solid rgba(160,86,255,.2);
+  border-radius: 10px;
+  font-size: clamp(8px, 1vw, 12px);
+  font-weight: 700;
+  color: rgba(160,86,255,.9);
+  opacity: 0;
+  width: 100%;
+}
+.scene.active .ai-bar { animation: riseIn .4s 2.0s forwards; }
+.ai-spinner { width: 10px; height: 10px; border: 2px solid rgba(160,86,255,.3); border-top-color: #a056ff; border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SCENE 5 — PAYMENT LINKS
+════════════════════════════════════════════════════════════════════════════ */
+#s5 { flex-direction: row; gap: 6%; }
+
+.s5-left { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 14px; }
+.s5-h { font-size: clamp(20px, 3vw, 40px); font-weight: 900; letter-spacing: -1px; line-height: 1.1; opacity: 0; }
+.scene.active .s5-h { animation: riseIn .5s .3s forwards; }
+.s5-p { font-size: clamp(10px, 1.25vw, 15px); color: rgba(255,255,255,.45); line-height: 1.65; font-weight: 600; opacity: 0; }
+.scene.active .s5-p { animation: riseIn .4s .7s forwards; }
+
+.pay-list { flex: 1; display: flex; flex-direction: column; gap: 9px; justify-content: center; }
+.pay-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #16161a;
+  border: 1px solid #2a2a30;
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-size: clamp(10px, 1.25vw, 15px);
+  opacity: 0;
+}
+.pay-card.sent  { border-color: rgba(43,217,166,.35); background: rgba(43,217,166,.04); }
+.pay-card.going { border-color: rgba(255,45,135,.35); }
+.scene.active .pay-card:nth-child(1) { animation: slideLeft .4s .5s forwards; }
+.scene.active .pay-card:nth-child(2) { animation: slideLeft .4s .85s forwards; }
+.scene.active .pay-card:nth-child(3) { animation: slideLeft .4s 1.2s forwards; }
+.pay-name { flex: 1; font-weight: 700; color: #fff; }
+.pay-amt  { font-weight: 900; color: #fff; }
+.pay-link { font-size: clamp(8px, .9vw, 11px); color: #ff2d87; font-weight: 700; }
+.pay-check { color: #2bd9a6; font-size: 1.2em; font-weight: 900; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SCENE 6 — RECONCILIATION
+════════════════════════════════════════════════════════════════════════════ */
+#s6 { gap: 18px; }
+
+.s6-h { font-size: clamp(20px, 3vw, 40px); font-weight: 900; letter-spacing: -0.8px; text-align: center; opacity: 0; }
+.scene.active .s6-h { animation: riseIn .5s .2s forwards; }
+.s6-sub { font-size: clamp(10px, 1.25vw, 15px); color: rgba(255,255,255,.45); text-align: center; font-weight: 600; opacity: 0; max-width: 70%; }
+.scene.active .s6-sub { animation: riseIn .4s .6s forwards; }
+
+.tag-block {
+  background: #0d0d11;
+  border: 1px solid #2a2a30;
+  border-radius: 12px;
+  padding: 12px 18px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: clamp(9px, 1.1vw, 14px);
+  color: #a6e3a1;
+  opacity: 0;
+  width: 100%;
+}
+.scene.active .tag-block { animation: riseIn .5s .9s forwards; }
+.tag-key { color: #89b4fa; }
+.tag-num { color: #fab387; }
+.tag-str { color: #a6e3a1; }
+
+.flow-boxes {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  width: 100%;
+}
+.fbox {
+  background: #16161a;
+  border: 1px solid #2a2a30;
+  border-radius: 14px;
+  padding: 14px 18px;
+  text-align: center;
+  min-width: clamp(80px, 14%, 140px);
+  opacity: 0;
+}
+.fbox.hi { border-color: rgba(43,217,166,.35); }
+.fbox .fl { font-size: clamp(7px, .8vw, 10px); font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,.3); margin-bottom: 4px; }
+.fbox .fv { font-size: clamp(14px, 2vw, 26px); font-weight: 900; color: #fff; }
+.fbox.hi .fv { color: #2bd9a6; }
+.farrow { color: #2a2a30; font-size: clamp(14px, 2vw, 24px); font-weight: 900; opacity: 0; }
+.scene.active .fbox:nth-child(1)   { animation: riseIn .4s 1.4s forwards; }
+.scene.active .farrow:nth-child(2) { animation: fadeIn .3s 1.7s forwards; }
+.scene.active .fbox:nth-child(3)   { animation: riseIn .4s 1.7s forwards; }
+.scene.active .farrow:nth-child(4) { animation: fadeIn .3s 2.0s forwards; }
+.scene.active .fbox:nth-child(5)   { animation: riseIn .4s 2.0s forwards; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SCENE 7 — MONTHLY INSIGHT CORRECTOR (THE STANDOUT)
+════════════════════════════════════════════════════════════════════════════ */
+#s7 { gap: 12px; padding: 4% 6% 6%; }
+
+.s7-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,45,135,.12);
+  border: 1px solid rgba(255,45,135,.35);
+  border-radius: 999px;
+  padding: 6px 16px;
+  font-size: clamp(8px, 1vw, 12px);
+  font-weight: 800;
+  color: #ff2d87;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  opacity: 0;
+}
+.scene.active .s7-flag { animation: pop .5s .1s forwards; }
+.flag-dot { width: 6px; height: 6px; border-radius: 50%; background: #ff2d87; animation: pulse 1s infinite; }
+
+.s7-h {
+  font-size: clamp(22px, 3.6vw, 46px);
+  font-weight: 900;
+  letter-spacing: -1.5px;
+  text-align: center;
+  line-height: 1.05;
+  color: #fff;
+  opacity: 0;
+}
+.scene.active .s7-h { animation: riseIn .6s .4s forwards; }
+
+.compare-wrap {
+  display: grid;
+  grid-template-columns: 1fr 50px 1fr;
+  gap: 10px;
+  align-items: start;
+  width: 100%;
+}
+
+.compare-col { display: flex; flex-direction: column; gap: 7px; opacity: 0; }
+.scene.active .col-before { animation: slideRight .55s .9s forwards; }
+.scene.active .col-after  { animation: slideLeft  .55s 1.3s forwards; }
+
+.col-head {
+  text-align: center;
+  font-size: clamp(8px, .9vw, 11px);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  padding: 7px;
+  border-radius: 8px;
+  margin-bottom: 2px;
+}
+.col-head.wrong { background: rgba(255,77,106,.12); color: #ff4d6a; }
+.col-head.right { background: rgba(43,217,166,.12);  color: #2bd9a6; }
+
+.stat-card {
+  background: #16161a;
+  border: 1px solid #252528;
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+.stat-card.w { border-color: rgba(255,77,106,.2); }
+.stat-card.r { border-color: rgba(43,217,166,.2); }
+.stat-lbl { font-size: clamp(7px, .75vw, 9px); font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,.3); margin-bottom: 3px; }
+.stat-val { font-size: clamp(12px, 1.7vw, 21px); font-weight: 900; }
+.stat-val.red    { color: #ff4d6a; }
+.stat-val.green  { color: #2bd9a6; }
+.stat-val.muted  { color: rgba(255,255,255,.25); text-decoration: line-through; font-weight: 600; }
+
+.vs-mid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding-top: 26px;
+  opacity: 0;
+}
+.scene.active .vs-mid { animation: fadeIn .4s 1.1s forwards; }
+.vs-vline { width: 1px; height: 32px; background: rgba(255,255,255,.08); }
+.vs-lbl {
+  font-size: clamp(9px, 1.1vw, 13px);
+  font-weight: 900;
+  color: #ff2d87;
+  background: #0b0b0d;
+  border: 1px solid rgba(255,45,135,.3);
+  border-radius: 6px;
+  padding: 3px 7px;
+}
+
+.s7-cta {
+  width: 100%;
+  text-align: center;
+  padding: 12px 20px;
+  background: rgba(43,217,166,.07);
+  border: 1px solid rgba(43,217,166,.2);
+  border-radius: 14px;
+  font-size: clamp(11px, 1.5vw, 19px);
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.4;
+  opacity: 0;
+}
+.scene.active .s7-cta { animation: riseIn .6s 2.1s forwards; }
+.s7-cta .hi { color: #2bd9a6; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SCENE 8 — CATEGORY BREAKDOWN
+════════════════════════════════════════════════════════════════════════════ */
+#s8 { flex-direction: row; gap: 6%; }
+
+.s8-left { flex: 0 0 36%; display: flex; flex-direction: column; justify-content: center; gap: 14px; }
+.s8-h { font-size: clamp(20px, 2.8vw, 36px); font-weight: 900; letter-spacing: -0.8px; line-height: 1.1; opacity: 0; }
+.scene.active .s8-h { animation: riseIn .5s .3s forwards; }
+.s8-p { font-size: clamp(10px, 1.2vw, 15px); color: rgba(255,255,255,.4); line-height: 1.65; font-weight: 600; opacity: 0; }
+.scene.active .s8-p { animation: riseIn .5s .7s forwards; }
+
+.totals-mini { display: flex; gap: 8px; flex-wrap: wrap; opacity: 0; }
+.scene.active .totals-mini { animation: riseIn .4s 1.1s forwards; }
+.t-box {
+  flex: 1;
+  min-width: 0;
+  background: #16161a;
+  border: 1px solid #2a2a30;
+  border-radius: 12px;
+  padding: 10px 12px;
+  text-align: center;
+}
+.t-box.hi { border-color: rgba(43,217,166,.35); }
+.t-lbl { font-size: clamp(6px, .75vw, 9px); font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: rgba(255,255,255,.3); margin-bottom: 4px; }
+.t-val { font-size: clamp(12px, 1.6vw, 20px); font-weight: 900; color: #fff; }
+.t-box.hi .t-val { color: #2bd9a6; }
+
+.cat-bars { flex: 1; display: flex; flex-direction: column; gap: 9px; justify-content: center; }
+.cat-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  background: #16161a;
+  border: 1px solid #2a2a30;
+  border-radius: 13px;
+  position: relative;
+  overflow: hidden;
+  font-size: clamp(9px, 1.1vw, 14px);
+  opacity: 0;
+}
+.scene.active .cat-row:nth-child(1) { animation: riseIn .35s .5s forwards; }
+.scene.active .cat-row:nth-child(2) { animation: riseIn .35s .7s forwards; }
+.scene.active .cat-row:nth-child(3) { animation: riseIn .35s .9s forwards; }
+.scene.active .cat-row:nth-child(4) { animation: riseIn .35s 1.1s forwards; }
+.scene.active .cat-row:nth-child(5) { animation: riseIn .35s 1.3s forwards; }
+
+.cat-bg {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  opacity: .1;
+  border-radius: 13px;
+  width: 0;
+  transition: width 1.3s 0.6s cubic-bezier(.4,0,.2,1);
+}
+.scene.active .cat-bg { width: var(--bw); }
+.cat-dot-r { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; z-index: 1; }
+.cat-lbl-r { flex: 1; font-weight: 700; z-index: 1; color: #fff; }
+.split-tag {
+  font-size: clamp(7px, .8vw, 10px);
+  font-weight: 800;
+  background: rgba(43,217,166,.12);
+  color: #2bd9a6;
+  border-radius: 5px;
+  padding: 2px 7px;
+  z-index: 1;
+}
+.cat-amt-r { font-weight: 900; z-index: 1; color: #fff; white-space: nowrap; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   SCENE 9 — OUTRO
+════════════════════════════════════════════════════════════════════════════ */
+#s9 { gap: 14px; }
+
+.s9-logo {
+  font-size: clamp(64px, 10vw, 128px);
+  font-weight: 900;
+  letter-spacing: -4px;
+  opacity: 0;
+}
+.s9-logo .dot { color: #ff2d87; }
+.scene.active .s9-logo { animation: pop .8s .2s forwards; }
+
+.s9-line {
+  width: clamp(80px, 28%, 240px);
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ff2d87, #ffb84d, #2bd9a6, #3da9ff, #a056ff);
+  opacity: 0;
+}
+.scene.active .s9-line { animation: fadeIn .5s .8s forwards; }
+
+.s9-sub {
+  font-size: clamp(11px, 1.5vw, 19px);
+  font-weight: 700;
+  color: rgba(255,255,255,.5);
+  text-align: center;
+  max-width: 60%;
+  line-height: 1.5;
+  opacity: 0;
+}
+.scene.active .s9-sub { animation: fadeIn .5s 1.1s forwards; }
+
+.s9-chips { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; opacity: 0; }
+.scene.active .s9-chips { animation: riseIn .5s 1.5s forwards; }
+.s9-chip {
+  background: #16161a;
+  border: 1px solid #2a2a30;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: clamp(9px, 1.1vw, 13px);
+  font-weight: 700;
+  color: rgba(255,255,255,.5);
+}
+.s9-chip span { color: #fff; }
+
+.s9-tagline {
+  font-size: clamp(12px, 1.6vw, 20px);
+  font-weight: 800;
+  color: rgba(255,255,255,.25);
+  letter-spacing: 0.5px;
+  opacity: 0;
+  text-align: center;
+}
+.scene.active .s9-tagline { animation: fadeIn .5s 1.8s forwards; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+
+  <!-- ── SCENE 1 ─────────────────────────────────────────────────────────── -->
+  <div class="scene" id="s1" data-duration="4000">
+    <div class="rainbow top"></div>
+    <div class="s1-logo">bunq<span class="dot">.</span></div>
+    <div class="s1-pill">
+      <div class="s1-pill-dot"></div>
+      <span class="s1-pill-text">Introducing SplitBill — the smarter way to share</span>
+    </div>
+    <div class="s1-tagline">AI-powered group expense splitting that actually understands your money</div>
+    <div class="rainbow bottom"></div>
+  </div>
+
+  <!-- ── SCENE 2 ─────────────────────────────────────────────────────────── -->
+  <div class="scene" id="s2" data-duration="6500">
+    <div class="rainbow top"></div>
+    <div class="s2-headline">Your bank thinks you spent <span class="grad-text">€194</span>.<br>You didn't.</div>
+    <div class="s2-grid">
+      <div class="s2-col">
+        <div class="col-label bad">❌ What bunq records</div>
+        <div class="bank-card bad"><span class="bc-label">Restaurant bill</span><span class="bc-val red">−€78.40</span></div>
+        <div class="bank-card"><span class="bc-label">Tikkie from Tom</span><span class="bc-val strike">+€15.32</span></div>
+        <div class="bank-card"><span class="bc-label">Tikkie from Sarah</span><span class="bc-val strike">+€35.75</span></div>
+        <div class="bank-card"><span class="bc-label">Tikkie from Person 2</span><span class="bc-val strike">+€13.67</span></div>
+      </div>
+      <div class="vs-center">
+        <div class="vs-line-v"></div>
+        <div class="vs-txt">VS</div>
+        <div class="vs-line-v"></div>
+      </div>
+      <div class="s2-col">
+        <div class="col-label good">✓ What actually happened</div>
+        <div class="bank-card good"><span class="bc-label">Your dinner share</span><span class="bc-val green">€27.33</span></div>
+        <div class="bank-card good"><span class="bc-label">Tom's share ← he paid</span><span class="bc-val green">€15.32</span></div>
+        <div class="bank-card good"><span class="bc-label">Sarah's share ← she paid</span><span class="bc-val green">€35.75</span></div>
+        <div class="bank-card good"><span class="bc-label">Person 2's share ← paid</span><span class="bc-val green">€13.67</span></div>
+      </div>
+    </div>
+    <div class="verdict-row">
+      <div class="verdict-box bad">bunq says: you spent €78.40 on dinner.</div>
+      <div class="verdict-box good">Reality: you spent €27.33 on dinner.</div>
+    </div>
+    <div class="rainbow bottom"></div>
+  </div>
+
+  <!-- ── SCENE 3 ─────────────────────────────────────────────────────────── -->
+  <div class="scene" id="s3" data-duration="5000">
+    <div class="rainbow top"></div>
+    <div class="s3-left">
+      <div class="eyebrow accent">Step 1 — Capture</div>
+      <div class="s3-h">Point. Shoot.<br><span class="grad-text">Done.</span></div>
+      <div class="s3-p">Point your camera at any receipt. Banq's AI reads every line item, price, and tax — in under three seconds. No manual entry. Ever.</div>
+      <div class="s3-badge"><div class="badge-pulse"></div>AWS Textract · instant OCR</div>
+    </div>
+    <div class="receipt-wrap">
+      <div class="receipt-paper-top"></div>
+      <div class="receipt-body">
+        <div class="scan-line"></div>
+        <div class="r-head">
+          <div class="r-name">TOSCANINI</div>
+          <div class="r-sub">Table 4 · 3 guests · Amsterdam</div>
+        </div>
+        <div class="r-row"><span class="r-l">Grilled Chicken</span><span class="r-r">14.50</span></div>
+        <div class="r-row"><span class="r-l">Caesar Salad</span><span class="r-r">11.00</span></div>
+        <div class="r-row"><span class="r-l">Pasta Carbonara</span><span class="r-r">13.50</span></div>
+        <div class="r-row"><span class="r-l">Draft Beer</span><span class="r-r">5.00</span></div>
+        <div class="r-row"><span class="r-l">Sparkling Water</span><span class="r-r">3.50</span></div>
+        <div class="r-div"></div>
+        <div class="r-row"><span class="r-l">Subtotal</span><span class="r-r">47.50</span></div>
+        <div class="r-row"><span class="r-l">BTW 21%</span><span class="r-r">9.98</span></div>
+        <div class="r-div solid"></div>
+        <div class="r-row r-total"><span class="r-l">TOTAL</span><span class="r-r">57.48</span></div>
+      </div>
+      <div class="receipt-paper-bot"></div>
+    </div>
+    <div class="rainbow bottom"></div>
+  </div>
+
+  <!-- ── SCENE 4 ─────────────────────────────────────────────────────────── -->
+  <div class="scene" id="s4" data-duration="5500">
+    <div class="rainbow top"></div>
+    <div class="s4-top">
+      <div class="eyebrow accent">Steps 2 + 3 — Voice + AI Split</div>
+      <div class="s4-h">Say it. <span class="grad-text">Claude handles the rest.</span></div>
+    </div>
+    <div class="voice-quote">
+      <span class="mic-icon">🎙</span>
+      <em>"I had the chicken and the water. Sarah got the caesar salad. Tom had pasta and the beer."</em>
+    </div>
+    <table class="split-table">
+      <thead><tr><th>Person</th><th>Items</th><th>Subtotal</th><th>Tax</th><th>Owes</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><div style="display:inline-flex;align-items:center"><div class="avatar-s" style="background:#ff2d87">Y</div><strong>You</strong></div></td>
+          <td style="color:rgba(255,255,255,.4);font-size:.9em">Grilled Chicken, Water</td>
+          <td style="color:rgba(255,255,255,.5)">€18.00</td>
+          <td style="color:rgba(255,255,255,.5)">€3.79</td>
+          <td style="font-weight:900;color:#2bd9a6">€21.79</td>
+          <td><span class="badge-pill b-you">Your share</span></td>
+        </tr>
+        <tr>
+          <td><div style="display:inline-flex;align-items:center"><div class="avatar-s" style="background:#3da9ff">S</div><strong>Sarah</strong></div></td>
+          <td style="color:rgba(255,255,255,.4);font-size:.9em">Caesar Salad</td>
+          <td style="color:rgba(255,255,255,.5)">€11.00</td>
+          <td style="color:rgba(255,255,255,.5)">€2.31</td>
+          <td style="font-weight:900;color:#2bd9a6">€13.31</td>
+          <td><span class="badge-pill b-pending">⏳ Pending</span></td>
+        </tr>
+        <tr>
+          <td><div style="display:inline-flex;align-items:center"><div class="avatar-s" style="background:#ffb84d">T</div><strong>Tom</strong></div></td>
+          <td style="color:rgba(255,255,255,.4);font-size:.9em">Pasta Carbonara, Beer</td>
+          <td style="color:rgba(255,255,255,.5)">€18.50</td>
+          <td style="color:rgba(255,255,255,.5)">€3.88</td>
+          <td style="font-weight:900;color:#2bd9a6">€22.38</td>
+          <td><span class="badge-pill b-paid">✓ Paid</span></td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="ai-bar"><div class="ai-spinner"></div>Claude Sonnet 4.6 · fuzzy item matching · proportional tax distribution · shared dish splitting</div>
+    <div class="rainbow bottom"></div>
+  </div>
+
+  <!-- ── SCENE 5 ─────────────────────────────────────────────────────────── -->
+  <div class="scene" id="s5" data-duration="4500">
+    <div class="rainbow top"></div>
+    <div class="s5-left">
+      <div class="eyebrow positive">Step 4 — Payment Requests</div>
+      <div class="s5-h">Real payment links.<br><span class="grad-text-green">One tap to send.</span></div>
+      <div class="s5-p">Banq creates actual bunq.me payment requests for each person's exact share. Drop them in the group chat. Track who's paid in real time.</div>
+    </div>
+    <div class="pay-list">
+      <div class="pay-card going">
+        <div class="avatar-s" style="background:#3da9ff">S</div>
+        <div class="pay-name">Sarah</div>
+        <div class="pay-amt">€13.31</div>
+        <div class="pay-link">🔗 bunq.me/pay/sarah</div>
+      </div>
+      <div class="pay-card going">
+        <div class="avatar-s" style="background:#ffb84d">T</div>
+        <div class="pay-name">Tom</div>
+        <div class="pay-amt">€22.38</div>
+        <div class="pay-link">🔗 bunq.me/pay/tom</div>
+      </div>
+      <div class="pay-card sent">
+        <div class="pay-check">✓</div>
+        <div class="pay-name" style="color:#2bd9a6">Tom paid</div>
+        <div class="pay-amt" style="color:#2bd9a6">€22.38 received</div>
+        <span class="badge-pill b-paid">Confirmed</span>
+      </div>
+    </div>
+    <div class="rainbow bottom"></div>
+  </div>
+
+  <!-- ── SCENE 6 ─────────────────────────────────────────────────────────── -->
+  <div class="scene" id="s6" data-duration="5000">
+    <div class="rainbow top"></div>
+    <div class="s6-h">Every Tikkie, <span class="grad-text">automatically matched.</span></div>
+    <div class="s6-sub">A machine-readable tag travels with every payment — linking each Tikkie back to its original expense with no manual reconciliation needed.</div>
+    <div class="tag-block">
+      <span class="tag-key">"description"</span>: <span class="tag-str">"SPLIT|TXN</span><span class="tag-num">32033255</span><span class="tag-str">|Sarah|</span><span class="tag-num">13.31</span><span class="tag-str">"</span>
+      <br><span style="color:rgba(255,255,255,.25);font-size:.85em">↑ bill ID  ↑ name  ↑ amount — embedded in every bunq.me request</span>
+    </div>
+    <div class="flow-boxes">
+      <div class="fbox"><div class="fl">You paid</div><div class="fv">€57.48</div></div>
+      <div class="farrow">→</div>
+      <div class="fbox"><div class="fl">Tikkies in</div><div class="fv">+€35.69</div></div>
+      <div class="farrow">→</div>
+      <div class="fbox hi"><div class="fl">Your actual cost</div><div class="fv">€21.79</div></div>
+    </div>
+    <div class="rainbow bottom"></div>
+  </div>
+
+  <!-- ── SCENE 7 — THE STANDOUT HIGHLIGHT ──────────────────────────────── -->
+  <div class="scene" id="s7" data-duration="9000">
+    <div class="rainbow top"></div>
+    <div class="s7-flag"><div class="flag-dot"></div>Standout Feature</div>
+    <div class="s7-h">The <span class="grad-text">Monthly Insight Corrector.</span><br>Your finances, finally honest.</div>
+    <div class="compare-wrap">
+      <div class="compare-col col-before">
+        <div class="col-head wrong">❌ Without Banq</div>
+        <div class="stat-card w"><div class="stat-lbl">Gross Spent</div><div class="stat-val red">€194.59</div></div>
+        <div class="stat-card w"><div class="stat-lbl">Tikkies (counted as income)</div><div class="stat-val muted">€64.74 noise</div></div>
+        <div class="stat-card w"><div class="stat-lbl">What bunq calls your spend</div><div class="stat-val red">€194.59 ← wrong</div></div>
+        <div class="stat-card w"><div class="stat-lbl">Food & Drink category</div><div class="stat-val red">€78.40 ← full bill</div></div>
+      </div>
+      <div class="vs-mid">
+        <div class="vs-vline"></div>
+        <div class="vs-lbl">VS</div>
+        <div class="vs-vline"></div>
+      </div>
+      <div class="compare-col col-after">
+        <div class="col-head right">✓ With Banq</div>
+        <div class="stat-card r"><div class="stat-lbl">Gross Spent</div><div class="stat-val green">€194.59</div></div>
+        <div class="stat-card r"><div class="stat-lbl">Tikkies netted out</div><div class="stat-val green">−€64.74 ✓</div></div>
+        <div class="stat-card r"><div class="stat-lbl">Net Personal Cost</div><div class="stat-val green">€129.85 ✓</div></div>
+        <div class="stat-card r"><div class="stat-lbl">Food & Drink category</div><div class="stat-val green">€27.33 ✓ your share</div></div>
+      </div>
+    </div>
+    <div class="s7-cta">Reimbursements netted. Categories corrected. Nothing inflated. <span class="hi">Just the truth.</span></div>
+    <div class="rainbow bottom"></div>
+  </div>
+
+  <!-- ── SCENE 8 ─────────────────────────────────────────────────────────── -->
+  <div class="scene" id="s8" data-duration="5500">
+    <div class="rainbow top"></div>
+    <div class="s8-left">
+      <div class="eyebrow blue">Monthly Summary</div>
+      <div class="s8-h">Real spending.<br>Beautiful clarity.</div>
+      <div class="s8-p">Every category reflects your true personal cost — not the gross amount. Split bills are annotated. Tikkies are silenced. Only what you actually spent, counts.</div>
+      <div class="totals-mini">
+        <div class="t-box"><div class="t-lbl">Gross</div><div class="t-val">€194.59</div></div>
+        <div class="t-box"><div class="t-lbl">Tikkies</div><div class="t-val">−€64.74</div></div>
+        <div class="t-box hi"><div class="t-lbl">Net Cost</div><div class="t-val">€129.85</div></div>
+      </div>
+    </div>
+    <div class="cat-bars">
+      <div class="cat-row" style="--bw:100%"><div class="cat-bg" style="background:#4caf50"></div><div class="cat-dot-r" style="background:#4caf50"></div><div class="cat-lbl-r">Groceries</div><div class="cat-amt-r">€34.20</div></div>
+      <div class="cat-row" style="--bw:88%"><div class="cat-bg" style="background:#607d8b"></div><div class="cat-dot-r" style="background:#607d8b"></div><div class="cat-lbl-r">Bills & Utilities</div><div class="cat-amt-r">€29.99</div></div>
+      <div class="cat-row" style="--bw:69%"><div class="cat-bg" style="background:#ff9800"></div><div class="cat-dot-r" style="background:#ff9800"></div><div class="cat-lbl-r">Entertainment</div><div class="cat-amt-r">€23.50</div></div>
+      <div class="cat-row" style="--bw:80%"><div class="cat-bg" style="background:#ff5722"></div><div class="cat-dot-r" style="background:#ff5722"></div><div class="cat-lbl-r">Food & Drink</div><div class="split-tag">split ✓</div><div class="cat-amt-r">€27.33</div></div>
+      <div class="cat-row" style="--bw:37%"><div class="cat-bg" style="background:#2196f3"></div><div class="cat-dot-r" style="background:#2196f3"></div><div class="cat-lbl-r">Transport</div><div class="cat-amt-r">€12.60</div></div>
+    </div>
+    <div class="rainbow bottom"></div>
+  </div>
+
+  <!-- ── SCENE 9 ─────────────────────────────────────────────────────────── -->
+  <div class="scene" id="s9" data-duration="6000">
+    <div class="rainbow top"></div>
+    <div class="s9-logo">bunq<span class="dot">.</span></div>
+    <div class="s9-line"></div>
+    <div class="s9-sub">The only bill splitting app that corrects your monthly spending — not just the split.</div>
+    <div class="s9-chips">
+      <div class="s9-chip"><span>Claude Sonnet 4.6</span> · AI splitting</div>
+      <div class="s9-chip"><span>bunq API</span> · native payments</div>
+      <div class="s9-chip"><span>AWS Textract</span> · receipt OCR</div>
+    </div>
+    <div class="s9-tagline">Built for the bunq Hackathon · 2025</div>
+    <div class="rainbow bottom"></div>
+  </div>
+
+  <!-- ── Progress bar ──────────────────────────────────────────────────────── -->
+  <div class="progress-track">
+    <button class="ctrl-btn" id="btnPP" onclick="togglePause()">⏸</button>
+    <button class="ctrl-btn" onclick="restart()">↺</button>
+    <div class="progress-bar-wrap"><div class="progress-fill" id="pFill"></div></div>
+    <div class="scene-dots" id="dots"></div>
+    <div class="scene-counter" id="counter">1 / 9</div>
+  </div>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────────────────
+const SCENES = ['s1','s2','s3','s4','s5','s6','s7','s8','s9'];
+let cur = 0, paused = false;
+let elapsed = 0, tickId = null;
+
+// ── Scene management ──────────────────────────────────────────────────────────
+function getDur(i) {
+  return parseInt(document.getElementById(SCENES[i]).dataset.duration, 10);
+}
+
+function totalMs() {
+  return SCENES.reduce((s, _, i) => s + getDur(i), 0);
+}
+
+function elapsedBefore(i) {
+  return SCENES.slice(0, i).reduce((s, _, j) => s + getDur(j), 0);
+}
+
+function showScene(i) {
+  SCENES.forEach((id, j) => {
+    document.getElementById(id).classList.toggle('active', j === i);
+  });
+  document.querySelectorAll('.scene-dot').forEach((d, j) => d.classList.toggle('active', j === i));
+  document.getElementById('counter').textContent = `${i+1} / ${SCENES.length}`;
+
+  elapsed = 0;
+  updateBar(i);
+  clearInterval(tickId);
+  if (!paused) beginTick(i);
+}
+
+function updateBar(i) {
+  const total = totalMs();
+  const pct = ((elapsedBefore(i) + elapsed) / total) * 100;
+  document.getElementById('pFill').style.width = pct + '%';
+}
+
+function beginTick(i) {
+  const dur = getDur(i);
+  tickId = setInterval(() => {
+    elapsed += 120;
+    updateBar(i);
+    if (elapsed >= dur) {
+      clearInterval(tickId);
+      if (cur < SCENES.length - 1) { cur++; showScene(cur); }
+    }
+  }, 120);
+}
+
+function togglePause() {
+  paused = !paused;
+  document.getElementById('btnPP').textContent = paused ? '▶' : '⏸';
+  if (paused) { clearInterval(tickId); }
+  else { beginTick(cur); }
+}
+
+function restart() {
+  clearInterval(tickId);
+  cur = 0; paused = false;
+  document.getElementById('btnPP').textContent = '⏸';
+  showScene(0);
+}
+
+// ── Dots ──────────────────────────────────────────────────────────────────────
+const dotsEl = document.getElementById('dots');
+SCENES.forEach((id, i) => {
+  const d = document.createElement('div');
+  d.className = 'scene-dot';
+  d.title = `Scene ${i+1}`;
+  d.onclick = e => {
+    e.stopPropagation();
+    clearInterval(tickId);
+    cur = i; paused = false;
+    document.getElementById('btnPP').textContent = '⏸';
+    showScene(i);
+  };
+  dotsEl.appendChild(d);
+});
+
+// ── Click / keyboard ──────────────────────────────────────────────────────────
+document.getElementById('stage').addEventListener('click', e => {
+  if (e.target.closest('.progress-track')) return;
+  clearInterval(tickId);
+  if (cur < SCENES.length - 1) { cur++; paused = false; document.getElementById('btnPP').textContent = '⏸'; showScene(cur); }
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === ' ')           { e.preventDefault(); togglePause(); }
+  if (e.key === 'ArrowRight' && cur < SCENES.length - 1) { clearInterval(tickId); cur++; paused = false; document.getElementById('btnPP').textContent = '⏸'; showScene(cur); }
+  if (e.key === 'ArrowLeft'  && cur > 0)                 { clearInterval(tickId); cur--; paused = false; document.getElementById('btnPP').textContent = '⏸'; showScene(cur); }
+  if (e.key === 'r' || e.key === 'R') restart();
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+showScene(0);
+</script>
+</body>
+</html>

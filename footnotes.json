@@ -1,19 +1,28 @@
 [
   {
     "original_total": 27.35,
+    "payments": [],
+    "total_repaid": 0,
+    "net_cost": 27.35,
+    "remaining_owed": 0,
+    "summary_line": "All repaid. You paid \u20ac27.35 total and received \u20ac0.00 back \u2014 your actual share was \u20ac27.35.",
+    "expense_transaction_id": 32033255
+  },
+  {
+    "original_total": 27.35,
     "payments": [
       {
         "name": "Person 2",
         "amount_owed": 13.67,
         "paid": true,
-        "paid_at": "2026-04-25 11:31:24.549955",
-        "transaction_id": 32033320
+        "paid_at": "2026-04-25 14:25:06.912397",
+        "transaction_id": 32033836
       }
     ],
     "total_repaid": 13.67,
     "net_cost": 13.68,
     "remaining_owed": 0,
     "summary_line": "All repaid. You paid \u20ac27.35 total and received \u20ac13.67 back \u2014 your actual share was \u20ac13.68.",
-    "expense_transaction_id": 32033255
+    "expense_transaction_id": null
   }
 ]
