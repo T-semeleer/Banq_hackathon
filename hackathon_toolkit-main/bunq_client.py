@@ -140,9 +140,12 @@ class BunqClient:
     # ------------------------------------------------------------------
 
     def get_primary_account_id(self) -> int:
-        resp = self.get(f"user/{self.user_id}/monetary-account-bank")
+        # Use /monetary-account (not /monetary-account-bank) to find active accounts
+        # across all account types, not just MonetaryAccountBank.
+        resp = self.get(f"user/{self.user_id}/monetary-account")
         for item in resp:
-            acc = item.get("MonetaryAccountBank", {})
+            account_type = next(iter(item))
+            acc = item[account_type]
             if acc.get("status") == "ACTIVE":
                 return acc["id"]
         raise RuntimeError("No active monetary account found")

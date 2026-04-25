@@ -57,13 +57,15 @@ python 01_authentication.py
 
 ### "No active monetary account found"
 
-**Cause:** `get_primary_account_id()` couldn't find an active bank account.
+**Cause:** `get_primary_account_id()` couldn't find any active account for this user.
 
 **Fix:** Run `02_create_monetary_account.py` first to create one, or check that your sandbox user was set up correctly.
 
+> **Note:** `get_primary_account_id()` queries `/monetary-account` (all account types). If you see this error and accounts do exist, check that at least one has `status == "ACTIVE"` by running `03_list_monetary_accounts.py`.
+
 ## Tips
 
-- **Always run scripts from the `python/` directory** so that `bunq_context.json` and imports work correctly.
+- **Always run scripts from the project root directory** so that `bunq_context.json` and imports work correctly.
 - **Don't commit `bunq_context.json`** — it contains your private key and session tokens. The `.gitignore` already excludes it.
 - **Sandbox money:** Request up to EUR 500 from `sugardaddy@bunq.com` (script 03 does this automatically).
 - **Rate limits:** If scripts fail with 429, just wait a few seconds. The context cache prevents most rate limit issues.

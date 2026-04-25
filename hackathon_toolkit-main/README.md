@@ -40,7 +40,11 @@ If you already have a bunq sandbox API key, set it as an environment variable:
 export BUNQ_API_KEY="your_sandbox_api_key_here"
 ```
 
-Or create a `.env` file in the project root (see `.env.example`).
+Or create a `.env` file in the project root:
+
+```
+BUNQ_API_KEY=your_sandbox_api_key_here
+```
 
 ## Getting Test Money
 
@@ -52,7 +56,8 @@ In the sandbox, request up to EUR 500 from `sugardaddy@bunq.com`. Script `03_mak
 |---|--------|-------------------|
 | 01 | `01_authentication.py` | The full auth flow: RSA keypair → installation → device → session |
 | 02 | `02_create_monetary_account.py` | Create and list bank accounts |
-| 03 | `03_make_payment.py` | Request test money and send a payment |
+| 03a | `03_list_monetary_accounts.py` | List all account types (bank, savings, investment) with balances and IBANs |
+| 03b | `03_make_payment.py` | Request test money and send a payment |
 | 04 | `04_request_money.py` | Create payment requests (RequestInquiry) |
 | 05 | `05_create_bunqme_link.py` | Generate shareable payment links |
 | 06 | `06_list_transactions.py` | Retrieve payment history with pagination |
@@ -94,11 +99,11 @@ After the first authentication, your session is cached in `bunq_context.json` so
 ```
 hackathon-toolkit/
 ├── README.md                        ← you are here
-├── .env.example
 ├── requirements.txt
 ├── bunq_client.py                   ← shared client library (auth + HTTP + signing)
 ├── 01_authentication.py
 ├── 02_create_monetary_account.py
+├── 03_list_monetary_accounts.py     ← list all account types with balances/IBANs
 ├── 03_make_payment.py
 ├── 04_request_money.py
 ├── 05_create_bunqme_link.py

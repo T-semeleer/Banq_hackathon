@@ -12,7 +12,8 @@ Base URLs:
 | POST | `/installation` | None | No | Register your RSA public key |
 | POST | `/device-server` | Installation token | Yes | Register your device |
 | POST | `/session-server` | Installation token | Yes | Create a session (get session token) |
-| GET | `/user/{uid}/monetary-account-bank` | Session token | No | List all bank accounts |
+| GET | `/user/{uid}/monetary-account` | Session token | No | List all accounts (all types: bank, savings, investment) |
+| GET | `/user/{uid}/monetary-account-bank` | Session token | No | List bank accounts only |
 | POST | `/user/{uid}/monetary-account-bank` | Session token | Yes | Create a new bank account |
 | POST | `/user/{uid}/monetary-account/{aid}/payment` | Session token | Yes | Send a payment |
 | GET | `/user/{uid}/monetary-account/{aid}/payment` | Session token | No | List payments (transactions) |
