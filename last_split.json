@@ -2,123 +2,75 @@
   "people": [
     {
       "name": "You",
-<<<<<<< Updated upstream
-      "items": [],
-      "subtotal": 10.0,
-=======
       "items": [
         {
           "name": "APPLE",
-          "price": 1.0
+          "price": 0.07
         },
         {
           "name": "BANANA",
-          "price": 1.5
+          "price": 0.11
         },
         {
           "name": "ORANGE",
-          "price": 1.2
+          "price": 0.09
         },
         {
           "name": "PEAR",
-          "price": 0.75
+          "price": 0.06
         },
         {
           "name": "GRAPES",
-          "price": 3.0
+          "price": 0.21
         },
-        {
-          "name": "WATERMELON (shared)",
-          "price": 1.5
-        },
-        {
-          "name": "YOGURT (shared)",
-          "price": 0.4
-        }
-      ],
-      "subtotal": 9.35,
-      "tax_share": 0.0,
-      "tip_share": 0.0,
-      "total_owed": 9.35,
-      "bunqme_url": null,
-      "payment_status": "pending"
-    },
-    {
-      "name": "Tom",
-      "items": [
         {
           "name": "STRAWBERRY",
-          "price": 2.5
+          "price": 0.18
         },
         {
           "name": "BLUEBERRY",
-          "price": 2.0
+          "price": 0.14
         },
         {
           "name": "KIWI",
-          "price": 1.8
+          "price": 0.13
         },
         {
-          "name": "WATERMELON (shared)",
-          "price": 1.5
+          "name": "WATERMELON",
+          "price": 0.32
         },
-        {
-          "name": "YOGURT (shared)",
-          "price": 0.4
-        }
-      ],
-      "subtotal": 8.2,
->>>>>>> Stashed changes
-      "tax_share": 0.0,
-      "tip_share": 0.0,
-      "total_owed": 8.2,
-      "bunqme_url": null,
-      "payment_status": "pending"
-    },
-    {
-      "name": "Marcus",
-      "items": [
         {
           "name": "LEMON",
-          "price": 0.6
+          "price": 0.04
         },
         {
           "name": "RASPBERRY",
-          "price": 3.0
+          "price": 0.21
         },
         {
           "name": "MILK",
-          "price": 1.5
+          "price": 0.11
         },
         {
           "name": "CHEESE",
-          "price": 2.8
+          "price": 0.2
         },
         {
-          "name": "WATERMELON (shared)",
-          "price": 1.5
-        },
-        {
-          "name": "YOGURT (shared)",
-          "price": 0.4
+          "name": "YOGURT",
+          "price": 0.09
         }
       ],
-      "subtotal": 9.8,
+      "subtotal": 6.84,
       "tax_share": 0.0,
       "tip_share": 0.0,
-      "total_owed": 9.8,
+      "total_owed": 6.84,
       "bunqme_url": null,
       "payment_status": "pending"
     }
   ],
   "unassigned": [],
-<<<<<<< Updated upstream
-  "total": 10.0,
-=======
   "total": 27.35,
->>>>>>> Stashed changes
   "tax": 0.0,
   "tip": 0.0,
-  "status": "review",
-  "expense_transaction_id": 777
+  "status": "review"
 }
