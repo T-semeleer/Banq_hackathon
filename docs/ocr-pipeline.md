@@ -206,9 +206,9 @@ For a single receipt: **< $0.01 total**
 
 | Component | Status |
 |---|---|
-| S3 image upload | Done |
-| Textract AnalyzeExpense call | Done |
-| Response parsing (items, tax, total, vendor) | Done |
-| Backend API route integration | Pending (Adam) |
-| Receipt image display on website | Pending (Pepijn / Noah) |
-| Testing with real receipts | Pending (Pepijn) |
+| S3 image upload | Done — `src/ocr.py upload_to_s3()` |
+| Textract AnalyzeExpense call | Done — `src/ocr.py analyze_receipt()` |
+| Response parsing (items, tax, total, vendor) | Done — `src/ocr.py parse_response()` |
+| Backend API route integration | Done — `src/app.py /api/ocr` |
+| Receipt image display on website | Done — `src/templates/index.html` |
+| Testing with real receipts | Done — `tests/test_ocr.py` (integration), `tests/test_ocr_core.py` (unit, 24 tests) |

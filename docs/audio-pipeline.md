@@ -172,9 +172,12 @@ For a typical 30-second voice memo: **< $0.01 total**
 
 | Component | Status |
 |---|---|
-| Whisper transcription | Done |
-| Claude Haiku validation | Done |
-| LLM matching (OCR + audio → JSON) | Done |
-| Backend API route integration | Pending (Adam) |
-| Browser audio recording UI | Pending (Noah / Adam) |
-| Bunq payment link injection | Pending (Terrence) |
+| Whisper transcription | Done — `src/audio.py` + `src/app.py /api/transcribe` |
+| Claude Haiku validation | Done — `src/audio.py validate()` |
+| LLM matching (OCR + audio → JSON) | Done — `src/matcher.py` |
+| Backend API route integration | Done — `src/app.py` (Flask, port 5000) |
+| Browser audio recording UI | Done — `src/templates/index.html` |
+| Bunq payment link injection | Done — `src/bunq.py` + `src/app.py /api/links` |
+| Payment reconciliation + footnote | Done — `src/reconciler.py` + `src/app.py /api/reconcile` |
+| Tikkie simulation (sandbox) | Done — `scripts/simulate_tikkie_payment.py` |
+| Test coverage | Done — `tests/test_audio_full.py`, `tests/test_merge.py` |

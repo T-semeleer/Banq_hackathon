@@ -29,15 +29,15 @@ SplitBill is a standalone web application that automates receipt splitting using
 
 | Layer | Technology |
 | :---- | :---- |
-| Frontend | Next.js (React) — deployed on Vercel or AWS Amplify |
-| Backend API | Next.js API routes or AWS Lambda (Python) |
-| OCR | AWS Textract (managed, no setup needed) |
-| Audio transcription | OpenAI Whisper API — Python/Flask service (`audio/`) on port 5050 |
-| LLM | Claude Opus via Anthropic API |
-| Payments | Bunq API (bunq.me tabs \+ request-inquiry) |
-| Database | DynamoDB (AWS) or simple JSON in S3 |
+| Frontend | Single-page HTML/JS — served by Flask (`src/templates/index.html`) |
+| Backend API | Flask (`src/app.py`) — unified server on port 5000 |
+| OCR | AWS Textract (`src/ocr.py`) — `AnalyzeExpense` via S3 |
+| Audio transcription | OpenAI Whisper API (`src/audio.py`) + Claude Haiku quality check |
+| LLM matching | Claude Sonnet (`src/matcher.py`) — OCR + transcript → split JSON |
+| Payments | Bunq API (`src/bunq.py`) — bunq.me tabs + request-inquiry simulation |
+| Reconciliation | Custom (`src/reconciler.py`) — matches incoming transactions to people |
 | File storage | AWS S3 (receipt images) |
-| Hosting | Vercel (frontend) \+ AWS Lambda (AI pipeline) |
+| Tikkie simulation | bunq sandbox (`scripts/simulate_tikkie_payment.py`) |
 
 ### Architecture layers
 
@@ -121,7 +121,7 @@ Use AWS Textract's `AnalyzeExpense` API, which is specifically designed for rece
 cd audio && python3 app.py
 ```
 
-**Next step (not yet built):** After transcription, send the text to Claude for a quality check — rate as GOOD / PARTIAL / POOR and prompt the user to re-record if POOR.
+**Built:** After transcription, the text is validated by Claude Haiku (`src/audio.py validate()`) — rated GOOD / PARTIAL / POOR. The quality check is wired into the unified app via `src/app.py /api/transcribe`. See `docs/audio-pipeline.md` for full API docs.
 
 ### LLM matching prompt
 
@@ -286,26 +286,61 @@ Each bill split is stored as a single JSON document in DynamoDB (or S3 for simpl
 
 ```
 Banq_hackathon/
-├── audio/                      # Audio transcription service (BUILT)
-│   ├── app.py                  # Flask app — /audio-test + /api/transcribe
-│   ├── templates/
-│   │   └── audio_test.html     # Recording UI
-│   ├── requirements.txt        # flask, openai, python-dotenv
-│   ├── .env                    # OPENAI_API_KEY (never commit)
-│   └── .env.example            # Template
+├── src/                            # Core application code
+│   ├── app.py                      # Unified Flask server (port 5000) — all routes
+│   ├── matcher.py                  # Claude Sonnet bill splitting (OCR + transcript → JSON)
+│   ├── reconciler.py               # Payment reconciliation + footnote JSON
+│   ├── bunq.py                     # Bunq.me payment link creation
+│   ├── ocr.py                      # AWS Textract receipt OCR
+│   ├── audio.py                    # Whisper transcription + Claude Haiku validation
+│   └── templates/
+│       └── index.html              # Single-page UI (record, split, pay, track)
 │
-├── ocrstuf/                    # OCR pipeline (Streamlit — separate service)
-│   ├── app.py
-│   ├── core/
-│   └── engines/
+├── scripts/
+│   └── simulate_tikkie_payment.py  # CLI: simulate Tikkie repayment in bunq sandbox
 │
-├── hackathon_toolkit-main/     # Bunq API Python toolkit
+├── tests/
+│   ├── test_ocr_core.py            # OCR parse logic (24 tests, no AWS needed)
+│   ├── test_matcher_full.py        # Matcher parsing + Claude prompt (20 tests)
+│   ├── test_bunq_functions.py      # inject_links + create_payment_links (14 tests)
+│   ├── test_audio_full.py          # validate() + process_audio() (10 tests)
+│   ├── test_reconciler.py          # Core reconciler (10 tests)
+│   ├── test_reconciler_edge.py     # Edge cases: outgoing txns, large splits (20 tests)
+│   ├── test_app_routes.py          # All Flask routes (28 tests)
+│   ├── test_simulate.py            # Simulate script (14 tests)
+│   ├── test_merge.py               # End-to-end pipeline integration (8 tests)
+│   └── test_ocr.py                 # Integration test runner (real receipts, needs AWS)
 │
-├── .gitignore
-└── SplitBill-Project-Document.md
+├── docs/
+│   ├── audio-pipeline.md           # Audio API reference
+│   ├── ocr-pipeline.md             # OCR API reference
+│   ├── matcher.md                  # Matcher API reference
+│   ├── reconciler.md               # Reconciler API reference
+│   ├── app.md                      # Flask route reference
+│   ├── bunq-payments.md            # Bunq payment link API reference
+│   └── simulate-tikkie.md          # Tikkie simulation CLI reference
+│
+├── audio/                          # Standalone audio test service (port 5050)
+│   └── app.py                      # Original Flask audio-test page
+│
+├── ocrstuf/                        # Standalone OCR Streamlit app (separate service)
+│
+├── hackathon_toolkit-main/         # Bunq API Python toolkit + tutorial scripts
+│
+├── last_split.json                 # Latest split result (written by /api/split)
+├── CLAUDE.md                       # AI assistant instructions
+└── SplitBill-Project-Document.md  # This file
 ```
 
-**Planned (not yet built):** Next.js frontend (`app/`), shared split view, Bunq payment layer.
+**Run the unified app:**
+```bash
+python src/app.py    # → http://localhost:5000
+```
+
+**Run all tests:**
+```bash
+python -m pytest tests/    # 156 tests, all pass
+```
 
 ### Environment variables
 
