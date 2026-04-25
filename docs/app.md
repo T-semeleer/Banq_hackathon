@@ -47,15 +47,26 @@ python src/app.py
 
 ## Demo Flow (End-to-End)
 
+### Mode A — Hardcoded Dutch expenses
 ```
-POST /api/demo/setup              ← seed 6 realistic expenses + categories
-GET  /api/recent-expenses         ← pick the first expense (Restaurant De Halve Maan)
-POST /api/split                   ← split the bill with OCR text + voice transcript
-POST /api/links                   ← create bunq.me payment links per person
-POST /api/demo/simulate-all       ← simulate all Tikkie repayments in one shot
-GET  /api/reconcile               ← see who paid, net cost, summary line
-GET  /api/insights?month=YYYY-MM  ← category breakdown with sandbox overlay
-GET  /api/summary?month=YYYY-MM   ← full netting summary
+POST /api/demo/setup                          ← seeds 6 Dutch expenses + categories
+GET  /api/recent-expenses                     ← pick "Restaurant De Halve Maan"
+POST /api/split  {ocr_text, transcript, expense_transaction_id}
+POST /api/links
+POST /api/demo/simulate-all
+GET  /api/reconcile                           ← summary_line: "your actual share was €X"
+GET  /api/insights?month=YYYY-MM             ← category breakdown (sandbox overlay)
+```
+
+### Mode B — Real test receipt images
+```
+POST /api/demo/setup  {"source":"receipts"}  ← seeds 5 receipt-based expenses + categories
+GET  /api/demo/receipts                       ← browse receipts, get ocr_text + transaction_id
+POST /api/split  {ocr_text: receipt.ocr_text, transcript: "...", expense_transaction_id: receipt.transaction_id}
+POST /api/links
+POST /api/demo/simulate-all
+GET  /api/reconcile
+GET  /api/insights?month=YYYY-MM
 ```
 
 ---
@@ -87,32 +98,96 @@ Serves the single-page UI from `src/templates/index.html`.
 
 ### `POST /api/demo/setup`
 
-Seeds the sandbox with six realistic expense transactions and assigns spending categories locally so `/api/insights` returns real data (Tapix is production-only).
+Seeds the sandbox with demo expense transactions and assigns spending categories locally so `/api/insights` returns real data (Tapix is production-only). Takes ~5 seconds.
 
-**Steps performed:**
-1. Adds €500 from Sugar Daddy to fund the account.
-2. Creates six outgoing payments (Restaurant, Albert Heijn, NS Trein, Pathé, Etos, Vodafone).
-3. Stores `{transaction_id → category}` in `category_map.json`.
+**Body (optional):**
+
+```json
+{"source": "hardcoded"}
+```
+
+| `source` | Description |
+|---|---|
+| `"hardcoded"` (default) | 6 preset Dutch expenses: Restaurant De Halve Maan, Albert Heijn, NS Trein, Pathé, Etos, Vodafone |
+| `"receipts"` | 5 expenses from the real test receipt images in `test_receipts/` — see table below |
+
+**Receipt sources (`"receipts"` mode):**
+
+| File | Vendor | Total | Category |
+|---|---|---|---|
+| receipt_1.jpg | Green Supermarket | €27.35 | GROCERIES |
+| receipt_2.jpg | McDonald's Alicante | €1.80 | FOOD_AND_DRINK |
+| receipt_3.jpg | Food Lion | €19.55 | GROCERIES |
+| receipt_4.jpg | No Frills | €51.38 | GROCERIES |
+| receipt_5.jpg | Floor & Decor | €592.27 | SHOPPING |
+
+**Response (`"hardcoded"`):**
+
+```json
+{
+  "source": "hardcoded",
+  "seeded": [
+    {"id": 12345, "description": "Restaurant De Halve Maan", "amount": 78.40, "category": "FOOD_AND_DRINK", "label": "Group dinner — this is the one you split"}
+  ],
+  "count": 6,
+  "tip": "..."
+}
+```
+
+**Response (`"receipts"`):**
+
+```json
+{
+  "source": "receipts",
+  "seeded": [
+    {
+      "id": 12346,
+      "file": "receipt_1.jpg",
+      "vendor": "Green Supermarket",
+      "amount": 27.35,
+      "tax": null,
+      "category": "GROCERIES",
+      "items": [{"name": "Apple (x2)", "price": 1.00}, "..."],
+      "ocr_text": "Green Supermarket\nApple (x2)    1.00\n...",
+      "label": "Green Supermarket — 27.35"
+    }
+  ],
+  "count": 5,
+  "tip": "..."
+}
+```
+
+---
+
+### `GET /api/demo/receipts`
+
+Lists all 5 test receipt fixtures with their parsed line items and pre-formatted `ocr_text`.
+
+If `POST /api/demo/setup {"source":"receipts"}` has been called, each receipt also includes its `transaction_id` so you can wire it directly into `POST /api/split`.
 
 **Response:**
 
 ```json
 {
-  "seeded": [
+  "receipts": [
     {
-      "id": 12345,
-      "description": "Restaurant De Halve Maan",
-      "amount": 78.40,
-      "category": "FOOD_AND_DRINK",
-      "label": "Group dinner — this is the one you split"
+      "file": "receipt_1.jpg",
+      "vendor": "Green Supermarket",
+      "category": "GROCERIES",
+      "total": 27.35,
+      "tax": null,
+      "items": [{"name": "Apple (x2)", "price": 1.00}, "..."],
+      "ocr_text": "Green Supermarket\nApple (x2)    1.00\n...",
+      "transaction_id": 12346
     }
   ],
-  "count": 6,
-  "tip": "Pick the first transaction from /api/recent-expenses..."
+  "count": 5
 }
 ```
 
-**Takes ~5 seconds** due to sandbox processing delays.
+`transaction_id` is only present after `POST /api/demo/setup {"source":"receipts"}` has been called.
+
+The `ocr_text` field can be passed directly to `POST /api/split` without any image upload or OCR step.
 
 ---
 
@@ -396,7 +471,8 @@ User's configured monthly insight period start day (e.g., the 25th if they're pa
 
 | Component | Status |
 |---|---|
-| `/api/demo/setup` | Done — seeds 6 expenses + categories |
+| `/api/demo/setup` | Done — hardcoded (6 expenses) or receipts (5 real images) |
+| `/api/demo/receipts` | Done — lists receipt fixtures with ocr_text + transaction_id |
 | `/api/demo/simulate-all` | Done — bulk Tikkie simulation |
 | `/api/transcribe` | Done |
 | `/api/ocr` | Done |

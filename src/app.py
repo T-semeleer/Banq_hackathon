@@ -330,30 +330,92 @@ def summary():
 @app.route("/api/demo/setup", methods=["POST"])
 def demo_setup():
     """
-    Seed the sandbox account with six realistic demo expense transactions.
+    Seed the sandbox with demo expense transactions.
 
-    - Funds the account with €500 via Sugar Daddy.
-    - Creates one outgoing payment per demo expense.
-    - Assigns spending categories locally so /api/insights returns real data.
+    Body (optional): {"source": "hardcoded"} or {"source": "receipts"}
 
-    Call this once before starting a demo run. Takes ~5 seconds.
+    - "hardcoded" (default): 6 preset Dutch expenses (Restaurant De Halve Maan,
+      Albert Heijn, NS Trein, Pathé, Etos, Vodafone). Good for a clean narrative demo.
+
+    - "receipts": 5 expenses from the real test receipt images in test_receipts/
+      (Green Supermarket, McDonald's, Food Lion, No Frills, Floor & Decor).
+      Returns full receipt data including ocr_text ready to pass to /api/split.
+      Call GET /api/demo/receipts afterwards to browse them.
+
+    Assigns spending categories locally so /api/insights returns real data in sandbox.
+    Takes ~5 seconds due to sandbox processing.
     """
+    body = request.get_json(force=True) or {}
+    source = body.get("source", "hardcoded")
+
     try:
-        from demo_seeder import seed_demo
         client, account_id = _get_bunq()
-        seeded = seed_demo(client, account_id)
-        _state["demo_expenses"] = seeded
-        return jsonify({
-            "seeded": seeded,
-            "count": len(seeded),
-            "tip": (
-                "Pick the first transaction from /api/recent-expenses as your expense to split. "
-                "Then POST /api/split, POST /api/links, POST /api/demo/simulate-all, "
-                "GET /api/reconcile, GET /api/insights."
-            ),
-        })
+
+        if source == "receipts":
+            from demo_seeder import seed_from_receipts
+            seeded = seed_from_receipts(client, account_id)
+            _state["demo_expenses"] = seeded
+            return jsonify({
+                "source": "receipts",
+                "seeded": seeded,
+                "count": len(seeded),
+                "tip": (
+                    "Browse receipts at GET /api/demo/receipts. "
+                    "Pick any transaction from GET /api/recent-expenses, then "
+                    "POST /api/split with its ocr_text and expense_transaction_id."
+                ),
+            })
+        else:
+            from demo_seeder import seed_demo
+            seeded = seed_demo(client, account_id)
+            _state["demo_expenses"] = seeded
+            return jsonify({
+                "source": "hardcoded",
+                "seeded": seeded,
+                "count": len(seeded),
+                "tip": (
+                    "Pick the first transaction from GET /api/recent-expenses. "
+                    "Then POST /api/split, POST /api/links, "
+                    "POST /api/demo/simulate-all, GET /api/reconcile, GET /api/insights."
+                ),
+            })
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/demo/receipts")
+def demo_receipts():
+    """
+    List all 5 test receipt fixtures with their parsed data and pre-formatted ocr_text.
+
+    If POST /api/demo/setup {"source":"receipts"} has been called, each entry also
+    includes the bunq transaction_id so you can pass it as expense_transaction_id
+    to POST /api/split.
+
+    The ocr_text field can be passed directly to POST /api/split without any
+    image upload or OCR step.
+    """
+    from demo_seeder import RECEIPT_FIXTURES
+    expense_by_file = {
+        e["file"]: e
+        for e in (_state.get("demo_expenses") or [])
+        if "file" in e
+    }
+    receipts = []
+    for r in RECEIPT_FIXTURES:
+        entry = {
+            "file": r["file"],
+            "vendor": r["vendor"],
+            "category": r["category"],
+            "total": r["total"],
+            "tax": r["tax"],
+            "items": r["items"],
+            "ocr_text": r["ocr_text"],
+        }
+        if r["file"] in expense_by_file:
+            entry["transaction_id"] = expense_by_file[r["file"]]["id"]
+        receipts.append(entry)
+    return jsonify({"receipts": receipts, "count": len(receipts)})
 
 
 @app.route("/api/demo/simulate-all", methods=["POST"])
