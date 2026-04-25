@@ -1,0 +1,82 @@
+{
+  "transactions": [
+    {
+      "id": 10001,
+      "date": "2026-04-25",
+      "description": "Green Supermarket",
+      "amount": -27.35,
+      "currency": "EUR",
+      "counterparty": "Sugar Daddy",
+      "category": "GROCERIES",
+      "direction": "outgoing"
+    },
+    {
+      "id": 10002,
+      "date": "2026-04-25",
+      "description": "McDonald's Alicante",
+      "amount": -1.80,
+      "currency": "EUR",
+      "counterparty": "Sugar Daddy",
+      "category": "FOOD_AND_DRINK",
+      "direction": "outgoing"
+    },
+    {
+      "id": 10003,
+      "date": "2026-04-25",
+      "description": "Food Lion",
+      "amount": -19.55,
+      "currency": "EUR",
+      "counterparty": "Sugar Daddy",
+      "category": "GROCERIES",
+      "direction": "outgoing"
+    },
+    {
+      "id": 10004,
+      "date": "2026-04-25",
+      "description": "No Frills",
+      "amount": -51.38,
+      "currency": "EUR",
+      "counterparty": "Sugar Daddy",
+      "category": "GROCERIES",
+      "direction": "outgoing",
+      "note": "This is the one being split with Alice and Bob"
+    },
+    {
+      "id": 10005,
+      "date": "2026-04-25",
+      "description": "Floor & Decor",
+      "amount": -592.27,
+      "currency": "EUR",
+      "counterparty": "Sugar Daddy",
+      "category": "SHOPPING",
+      "direction": "outgoing"
+    },
+    {
+      "id": 30001,
+      "date": "2026-04-25",
+      "description": "Tikkie from Alice — SPLIT|TXN10004|Alice|11.68",
+      "amount": 11.68,
+      "currency": "EUR",
+      "counterparty": "Sugar Daddy",
+      "category": null,
+      "direction": "incoming",
+      "note": "Alice's share of the No Frills shop"
+    },
+    {
+      "id": 30002,
+      "date": "2026-04-25",
+      "description": "Tikkie from Bob — SPLIT|TXN10004|Bob|20.55",
+      "amount": 20.55,
+      "currency": "EUR",
+      "counterparty": "Sugar Daddy",
+      "category": null,
+      "direction": "incoming",
+      "note": "Bob's share of the No Frills shop"
+    }
+  ],
+  "summary": {
+    "total_spent": 692.35,
+    "tikkie_received": 32.23,
+    "net_personal_cost": 660.12
+  }
+}
