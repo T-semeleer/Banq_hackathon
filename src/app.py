@@ -36,6 +36,14 @@ from matcher import match as do_split, result_to_dict  # noqa: E402
 from reconciler import reconcile  # noqa: E402
 from bunq import create_payment_links, inject_links  # noqa: E402
 from summarizer import summarize_month  # noqa: E402
+from bunq_insights import (  # noqa: E402
+    fetch_category_summary,
+    fetch_category_transactions,
+    fetch_event_feed,
+    fetch_insight_preference,
+    fetch_all_categories,
+)
+from category_store import get as _get_category  # noqa: E402
 
 app = Flask(__name__, template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
@@ -47,6 +55,7 @@ _state: dict = {
     "bunq_client": None,
     "account_id": None,
     "expense_transaction_id": None,  # original outgoing payment that was split
+    "demo_expenses": None,           # populated by POST /api/demo/setup
 }
 
 
@@ -218,26 +227,28 @@ def reconcile_status():
 
 @app.route("/api/recent-expenses")
 def recent_expenses():
-    """Return the last 10 outgoing payments so the user can identify the expense being split."""
+    """Return the last 20 outgoing payments with spending category where known."""
     try:
         client, account_id = _get_bunq()
         raw = client.get(
             f"user/{client.user_id}/monetary-account/{account_id}/payment",
-            params={"count": 50},
+            params={"count": 100},
         )
         outgoing = []
         for item in raw:
             p = item.get("Payment", {})
             value = float(p.get("amount", {}).get("value", "0"))
             if value < 0:
+                txn_id = p.get("id")
                 outgoing.append({
-                    "id": p.get("id"),
+                    "id": txn_id,
                     "amount": round(abs(value), 2),
                     "description": p.get("description", ""),
                     "date": (p.get("created") or "")[:10],
                     "counterparty": (p.get("counterparty_alias") or {}).get("display_name", ""),
+                    "category": _get_category(txn_id) if txn_id else None,
                 })
-            if len(outgoing) >= 10:
+            if len(outgoing) >= 20:
                 break
         return jsonify(outgoing)
     except Exception as exc:
@@ -259,9 +270,9 @@ def simulate():
         client, account_id = _get_bunq()
         expense_id = _state.get("expense_transaction_id")
         if expense_id:
-            description = f"SPLIT|TXN{expense_id}|{person}|{float(amount):.2f}"
+            description = f"Tikkie from {person} — SPLIT|TXN{expense_id}|{person}|{float(amount):.2f}"
         else:
-            description = f"Tikkie repayment — {person}"
+            description = f"Tikkie from {person} — {float(amount):.2f}"
         resp = client.post(
             f"user/{client.user_id}/monetary-account/{account_id}/request-inquiry",
             {
@@ -309,6 +320,192 @@ def summary():
     try:
         client, account_id = _get_bunq()
         result = summarize_month(client, account_id, year, month)
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+# ── Demo setup ────────────────────────────────────────────────────────────────
+
+@app.route("/api/demo/setup", methods=["POST"])
+def demo_setup():
+    """
+    Seed the sandbox account with six realistic demo expense transactions.
+
+    - Funds the account with €500 via Sugar Daddy.
+    - Creates one outgoing payment per demo expense.
+    - Assigns spending categories locally so /api/insights returns real data.
+
+    Call this once before starting a demo run. Takes ~5 seconds.
+    """
+    try:
+        from demo_seeder import seed_demo
+        client, account_id = _get_bunq()
+        seeded = seed_demo(client, account_id)
+        _state["demo_expenses"] = seeded
+        return jsonify({
+            "seeded": seeded,
+            "count": len(seeded),
+            "tip": (
+                "Pick the first transaction from /api/recent-expenses as your expense to split. "
+                "Then POST /api/split, POST /api/links, POST /api/demo/simulate-all, "
+                "GET /api/reconcile, GET /api/insights."
+            ),
+        })
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/demo/simulate-all", methods=["POST"])
+def demo_simulate_all():
+    """
+    Simulate Tikkie repayments from every person in the current split.
+
+    Creates one request-inquiry to Sugar Daddy per person (auto-accepted in sandbox),
+    each with a description formatted like a real Tikkie repayment so the reconciler
+    can match it and compute your net personal cost.
+
+    Prerequisites: POST /api/split must have been called first.
+    """
+    if _state["split_result"] is None:
+        return jsonify({"error": "No split result — call POST /api/split first"}), 400
+    try:
+        client, account_id = _get_bunq()
+        expense_id = _state.get("expense_transaction_id")
+        results = []
+
+        for person in _state["split_result"].people:
+            if person.name.lower() in ("you", "me", "i") or person.total_owed <= 0:
+                continue
+            amount_str = f"{person.total_owed:.2f}"
+            if expense_id:
+                description = (
+                    f"Tikkie from {person.name} — "
+                    f"SPLIT|TXN{expense_id}|{person.name}|{amount_str}"
+                )
+            else:
+                description = f"Tikkie from {person.name} — {amount_str}"
+
+            try:
+                resp = client.post(
+                    f"user/{client.user_id}/monetary-account/{account_id}/request-inquiry",
+                    {
+                        "amount_inquired": {"value": amount_str, "currency": "EUR"},
+                        "counterparty_alias": {
+                            "type": "EMAIL",
+                            "value": "sugardaddy@bunq.com",
+                            "name": "Sugar Daddy",
+                        },
+                        "description": description,
+                        "allow_bunqme": False,
+                    },
+                )
+                results.append({
+                    "person": person.name,
+                    "amount": float(amount_str),
+                    "request_id": resp[0]["Id"]["id"],
+                    "description": description,
+                    "status": "simulated",
+                })
+                time.sleep(0.5)  # let sandbox auto-accept each request before the next
+            except Exception as exc:
+                results.append({
+                    "person": person.name,
+                    "amount": float(amount_str),
+                    "status": "error",
+                    "error": str(exc),
+                })
+
+        return jsonify({
+            "simulated": results,
+            "count": len(results),
+            "next": "Call GET /api/reconcile to see who has paid and your net cost.",
+        })
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+# ── Bunq native insights ───────────────────────────────────────────────────────
+
+def _parse_month(month_str: str) -> tuple[int, int]:
+    """Parse 'YYYY-MM' into (year, month), defaulting to current month."""
+    from datetime import date as _date
+    try:
+        year_s, month_s = month_str.split("-")
+        year, month = int(year_s), int(month_s)
+        if not (1 <= month <= 12):
+            raise ValueError
+        return year, month
+    except (ValueError, AttributeError):
+        today = _date.today()
+        return today.year, today.month
+
+
+@app.route("/api/insights")
+def bunq_insights():
+    """
+    Bunq-native category spend breakdown for a month.
+    Query param: month=YYYY-MM (defaults to current month).
+    """
+    year, month = _parse_month(request.args.get("month", ""))
+    try:
+        client, account_id = _get_bunq()
+        result = fetch_category_summary(client, year, month, account_id=account_id)
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/insights/transactions")
+def bunq_insight_transactions():
+    """
+    Transactions for a specific Bunq category.
+    Query params: category=FOOD_AND_DRINK&month=YYYY-MM
+    """
+    category = request.args.get("category", "").strip().upper()
+    if not category:
+        return jsonify({"error": "category param is required (e.g. FOOD_AND_DRINK)"}), 400
+    year, month = _parse_month(request.args.get("month", ""))
+    try:
+        client, account_id = _get_bunq()
+        result = fetch_category_transactions(client, category, year, month, account_id=account_id)
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/insights/categories")
+def bunq_categories():
+    """List all Bunq spending categories (system Tapix-assigned + user-defined)."""
+    try:
+        client, _ = _get_bunq()
+        result = fetch_all_categories(client)
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/events")
+def event_feed():
+    """
+    Bunq activity event feed with Tapix category enrichment on each event.
+    Query param: count=50 (max 200).
+    """
+    try:
+        count = min(max(int(request.args.get("count", 50)), 1), 200)
+        client, account_id = _get_bunq()
+        result = fetch_event_feed(client, account_id=account_id, count=count)
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/insights/preference")
+def insight_preference():
+    """User's configured monthly insight period start date."""
+    try:
+        client, _ = _get_bunq()
+        result = fetch_insight_preference(client)
         return jsonify(result)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500

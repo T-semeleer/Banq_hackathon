@@ -50,7 +50,7 @@ def summarize_month(client: BunqClient, account_id: int, year: int, month: int) 
           }
         }
     """
-    raw = _fetch_payments_for_month(client, account_id, year, month)
+    raw = fetch_payments_for_month(client, account_id, year, month)
 
     expenses: dict[int, dict] = {}
     tikkies: list[dict] = []
@@ -125,7 +125,7 @@ def summarize_month(client: BunqClient, account_id: int, year: int, month: int) 
     }
 
 
-def _fetch_payments_for_month(
+def fetch_payments_for_month(
     client: BunqClient, account_id: int, year: int, month: int
 ) -> list[dict]:
     """

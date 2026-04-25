@@ -1,8 +1,8 @@
-# Flask App — SplitBill
+# Flask App — SplitBill API Reference
 
 ## Overview
 
-`src/app.py` is the unified Flask backend for SplitBill. It wires together OCR, voice transcription, bill splitting, bunq payment links, reconciliation, and Tikkie simulation into a single server running on port 5000.
+`src/app.py` is the Flask backend for SplitBill. It wires together OCR, voice transcription, bill splitting, bunq payment links, reconciliation, Tikkie simulation, demo seeding, and Bunq native insights into a single server on port 5000.
 
 ---
 
@@ -45,20 +45,35 @@ python src/app.py
 
 ---
 
-## Session State
+## Demo Flow (End-to-End)
 
-All route handlers share a module-level dict:
+```
+POST /api/demo/setup              ← seed 6 realistic expenses + categories
+GET  /api/recent-expenses         ← pick the first expense (Restaurant De Halve Maan)
+POST /api/split                   ← split the bill with OCR text + voice transcript
+POST /api/links                   ← create bunq.me payment links per person
+POST /api/demo/simulate-all       ← simulate all Tikkie repayments in one shot
+GET  /api/reconcile               ← see who paid, net cost, summary line
+GET  /api/insights?month=YYYY-MM  ← category breakdown with sandbox overlay
+GET  /api/summary?month=YYYY-MM   ← full netting summary
+```
+
+---
+
+## Session State
 
 ```python
 _state = {
-    "split_result": None,   # SplitResult dataclass from matcher.py
-    "split_dict":   None,   # plain dict from result_to_dict()
-    "bunq_client":  None,   # authenticated BunqClient (cached)
-    "account_id":   None,   # int — primary bunq account ID (cached)
+    "split_result": None,        # SplitResult dataclass from matcher.py
+    "split_dict":   None,        # plain dict from result_to_dict()
+    "bunq_client":  None,        # authenticated BunqClient (cached)
+    "account_id":   None,        # int — primary bunq account ID (cached)
+    "expense_transaction_id": None,  # outgoing payment being split
+    "demo_expenses": None,       # list of seeded transactions from /api/demo/setup
 }
 ```
 
-State is reset on process restart. Sufficient for single-session hackathon demos.
+State resets on process restart. Sufficient for single-session hackathon demos.
 
 ---
 
@@ -68,46 +83,80 @@ State is reset on process restart. Sufficient for single-session hackathon demos
 
 Serves the single-page UI from `src/templates/index.html`.
 
-**Response:** HTML
+---
+
+### `POST /api/demo/setup`
+
+Seeds the sandbox with six realistic expense transactions and assigns spending categories locally so `/api/insights` returns real data (Tapix is production-only).
+
+**Steps performed:**
+1. Adds €500 from Sugar Daddy to fund the account.
+2. Creates six outgoing payments (Restaurant, Albert Heijn, NS Trein, Pathé, Etos, Vodafone).
+3. Stores `{transaction_id → category}` in `category_map.json`.
+
+**Response:**
+
+```json
+{
+  "seeded": [
+    {
+      "id": 12345,
+      "description": "Restaurant De Halve Maan",
+      "amount": 78.40,
+      "category": "FOOD_AND_DRINK",
+      "label": "Group dinner — this is the one you split"
+    }
+  ],
+  "count": 6,
+  "tip": "Pick the first transaction from /api/recent-expenses..."
+}
+```
+
+**Takes ~5 seconds** due to sandbox processing delays.
+
+---
+
+### `POST /api/demo/simulate-all`
+
+Simulates Tikkie repayments from every person in the current split result in one call. Each request-inquiry is auto-accepted by Sugar Daddy in sandbox.
+
+**Prerequisites:** `POST /api/split` must have been called first.
+
+**Response:**
+
+```json
+{
+  "simulated": [
+    {
+      "person": "Alice",
+      "amount": 19.60,
+      "request_id": 999,
+      "description": "Tikkie from Alice — SPLIT|TXN12345|Alice|19.60",
+      "status": "simulated"
+    }
+  ],
+  "count": 2,
+  "next": "Call GET /api/reconcile to see who has paid and your net cost."
+}
+```
 
 ---
 
 ### `POST /api/transcribe`
 
-Transcribes a voice recording using OpenAI Whisper.
+Transcribes a voice recording via OpenAI Whisper.
 
-**Request:** `multipart/form-data`
+**Request:** `multipart/form-data` with `audio` file (WebM, OGG, MP4, WAV).
 
-| Field | Type | Description |
-|---|---|---|
-| `audio` | file | Audio file (WebM, OGG, MP4, WAV) |
-
-**Response:**
-
-```json
-{"transcript": "I had the chicken, Sarah had the salad."}
-```
-
-**Error codes:**
-
-| Code | Reason |
-|---|---|
-| 400 | No audio file provided |
-| 400 | Empty audio file |
-| 501 | `OPENAI_API_KEY` not configured |
-| 500 | Whisper API error |
+**Response:** `{"transcript": "I had the chicken, Sarah had the salad."}`
 
 ---
 
 ### `POST /api/ocr`
 
-Extracts receipt items from an image using AWS Textract.
+Extracts receipt items from an image via AWS Textract.
 
-**Request:** `multipart/form-data`
-
-| Field | Type | Description |
-|---|---|---|
-| `image` | file | Receipt photo (JPEG, PNG, WebP) |
+**Request:** `multipart/form-data` with `image` file (JPEG, PNG, WebP).
 
 **Response:**
 
@@ -117,18 +166,11 @@ Extracts receipt items from an image using AWS Textract.
   "vendor": "De Silveren Spiegel",
   "items": [{"name": "Grilled Chicken", "price": 14.50}],
   "total": 46.87,
-  "tax": 3.87,
-  "image_url": "https://splitbill-receipts.s3.amazonaws.com/receipts/..."
+  "tax": 3.87
 }
 ```
 
-**Error codes:**
-
-| Code | Reason |
-|---|---|
-| 400 | No image file provided |
-| 501 | AWS credentials not configured |
-| 500 | Textract or S3 error |
+Disabled (501) if `AWS_ACCESS_KEY_ID` is not set.
 
 ---
 
@@ -136,48 +178,35 @@ Extracts receipt items from an image using AWS Textract.
 
 Splits the bill using Claude Sonnet. Stores result in `_state` and writes `last_split.json`.
 
-**Request:** `application/json`
+**Request:**
 
 ```json
 {
   "ocr_text": "Grilled Chicken 14.50\nTotal 46.87",
-  "transcript": "I had the chicken, Sarah had the salad."
+  "transcript": "I had the chicken, Sarah had the salad.",
+  "expense_transaction_id": 12345
 }
 ```
 
-**Response:** `result_to_dict()` shape — see `docs/matcher.md`.
+`expense_transaction_id` is optional — set it to the bunq payment ID of the expense being split so Tikkie descriptions encode the reference for reconciliation.
 
-**Error codes:**
-
-| Code | Reason |
-|---|---|
-| 400 | `ocr_text` or `transcript` missing or blank |
-| 500 | Claude API error or JSON parse failure |
-
-**Side effect:** Writes `last_split.json` to the project root for use by `scripts/simulate_tikkie_payment.py`.
+**Response:** See `docs/matcher.md`.
 
 ---
 
 ### `POST /api/links`
 
-Creates one bunq.me payment link per person and injects them into `_state["split_dict"]`.
+Creates one bunq.me payment link per person and injects URLs into the split dict.
 
 **Prerequisites:** `POST /api/split` must have been called first.
 
 **Response:** Updated split dict with `bunqme_url` and `payment_status: "link_created"` per person.
 
-**Error codes:**
-
-| Code | Reason |
-|---|---|
-| 400 | No split result in state |
-| 500 | bunq API error |
-
 ---
 
 ### `GET /api/reconcile`
 
-Polls bunq transaction history and returns per-person paid/unpaid status.
+Polls recent bunq payments and matches them against the split result.
 
 **Prerequisites:** `POST /api/split` must have been called first.
 
@@ -185,66 +214,181 @@ Polls bunq transaction history and returns per-person paid/unpaid status.
 
 ```json
 {
-  "original_total": 46.87,
+  "original_total": 78.40,
   "payments": [
     {
-      "name": "Sarah",
-      "amount_owed": 13.31,
+      "name": "Alice",
+      "amount_owed": 19.60,
       "paid": true,
-      "paid_at": "2024-01-15T14:23:00.000Z",
-      "transaction_id": 12345
+      "paid_at": "2026-04-25T14:23:00",
+      "transaction_id": 99901
     }
   ],
-  "total_repaid": 13.31,
-  "net_cost": 33.56,
-  "remaining_owed": 0.0
+  "total_repaid": 39.20,
+  "net_cost": 39.20,
+  "remaining_owed": 0.0,
+  "summary_line": "All repaid. You paid €78.40 total and received €39.20 back — your actual share was €39.20."
 }
 ```
 
-**Error codes:**
+`summary_line` is the footnote: plain-English statement of your actual personal cost after Tikkie repayments.
 
-| Code | Reason |
-|---|---|
-| 400 | No split result in state |
-| 500 | bunq API error |
+---
+
+### `GET /api/recent-expenses`
+
+Returns the last 20 outgoing payments with spending category where known.
+
+**Response:**
+
+```json
+[
+  {
+    "id": 12345,
+    "amount": 78.40,
+    "description": "Restaurant De Halve Maan",
+    "date": "2026-04-25",
+    "counterparty": "Sugar Daddy",
+    "category": "FOOD_AND_DRINK"
+  }
+]
+```
+
+`category` is populated from the local store after `POST /api/demo/setup`. Null for transactions without a known category.
 
 ---
 
 ### `POST /api/simulate`
 
-Simulates a Tikkie repayment via bunq sandbox request-inquiry.
+Simulates a single Tikkie repayment from one person.
 
-**Request:** `application/json`
-
-```json
-{"person": "Sarah", "amount": 13.31}
-```
+**Request:** `{"person": "Alice", "amount": 19.60}`
 
 **Response:**
 
 ```json
-{"success": true, "request_id": 999, "person": "Sarah", "amount": 13.31}
+{
+  "success": true,
+  "request_id": 999,
+  "person": "Alice",
+  "amount": 19.60,
+  "linked_expense_id": 12345
+}
 ```
 
-**Error codes:**
+The simulated payment description is formatted as:
+`"Tikkie from Alice — SPLIT|TXN12345|Alice|19.60"`
 
-| Code | Reason |
-|---|---|
-| 400 | `person` or `amount` missing |
-| 400 | `person` is blank |
-| 500 | bunq API error |
+This matches how a real Tikkie repayment would look and is parseable by the reconciler.
 
 ---
 
-## bunq Authentication
+### `GET /api/summary?month=YYYY-MM`
 
-`_get_bunq()` caches the client in `_state`:
-1. Reads `BUNQ_API_KEY` from environment
-2. If not set, calls `BunqClient.create_sandbox_user()` to create a fresh sandbox key
-3. Calls `client.authenticate()` (installation → device-server → session-server)
-4. Fetches and caches the primary account ID
+Monthly expense summary with Tikkie reimbursements netted against their originating expenses.
 
-Subsequent calls return the cached client — authentication happens at most once per process.
+**Response:** See `docs/tikkie-expense-netting.md`.
+
+---
+
+### `GET /api/insights?month=YYYY-MM`
+
+Bunq-native category spend breakdown for a month.
+
+In **production**: powered by Tapix automatic categorisation.
+In **sandbox**: automatically falls back to `build_sandbox_insights()` which computes the same breakdown from raw payments + `category_map.json` populated by `POST /api/demo/setup`.
+
+**Response:**
+
+```json
+{
+  "period": "2026-04",
+  "categories": [
+    {
+      "category": "FOOD_AND_DRINK",
+      "category_translated": "Food & Drink",
+      "color": "#FF6B35",
+      "icon": "food_and_drink",
+      "amount_total": {"value": "78.40", "currency": "EUR"},
+      "number_of_transactions": 1
+    }
+  ],
+  "total_spend": 194.59,
+  "currency": "EUR",
+  "source": "sandbox_overlay"
+}
+```
+
+`source` is `"tapix"` in production, `"sandbox_overlay"` in sandbox.
+
+---
+
+### `GET /api/insights/transactions?category=FOOD_AND_DRINK&month=YYYY-MM`
+
+Individual transactions for a specific spending category via `/insights-search`.
+
+**Response:**
+
+```json
+{
+  "period": "2026-04",
+  "category": "FOOD_AND_DRINK",
+  "transactions": [...],
+  "count": 1,
+  "total": 78.40
+}
+```
+
+---
+
+### `GET /api/insights/categories`
+
+Lists all available spending categories (system Tapix-assigned + user-defined).
+
+**Response:** `{"categories": [{"category": "FOOD_AND_DRINK", "type": "SYSTEM", ...}]}`
+
+---
+
+### `GET /api/events?count=50`
+
+Bunq activity event feed. Each event may carry a Tapix-assigned `category` field when enrichment is available.
+
+**Response:**
+
+```json
+{
+  "events": [
+    {
+      "id": 99901,
+      "created": "2026-04-25T14:23:00",
+      "action": "CREATE",
+      "type": "Payment",
+      "category": "FOOD_AND_DRINK",
+      "amount": -78.40,
+      "description": "Restaurant De Halve Maan",
+      "counterparty": "Sugar Daddy",
+      "status": "FINALIZED"
+    }
+  ],
+  "count": 50
+}
+```
+
+---
+
+### `GET /api/insights/preference`
+
+User's configured monthly insight period start day (e.g., the 25th if they're paid on the 25th).
+
+---
+
+## Persistent Files
+
+| File | Contents |
+|---|---|
+| `bunq_context.json` | Cached OAuth tokens — reused across restarts |
+| `last_split.json` | Latest split result — used by `scripts/simulate_tikkie_payment.py` |
+| `category_map.json` | `{transaction_id: category}` — populated by `POST /api/demo/setup` |
 
 ---
 
@@ -252,12 +396,18 @@ Subsequent calls return the cached client — authentication happens at most onc
 
 | Component | Status |
 |---|---|
-| Flask server setup | Done — `src/app.py` port 5000 |
+| `/api/demo/setup` | Done — seeds 6 expenses + categories |
+| `/api/demo/simulate-all` | Done — bulk Tikkie simulation |
 | `/api/transcribe` | Done |
 | `/api/ocr` | Done |
 | `/api/split` | Done |
 | `/api/links` | Done |
-| `/api/reconcile` | Done |
-| `/api/simulate` | Done |
-| Single-page UI | Done — `src/templates/index.html` |
-| Route tests | Done — `tests/test_app_routes.py` (28 tests) |
+| `/api/reconcile` | Done — includes `summary_line` footnote |
+| `/api/recent-expenses` | Done — 20 transactions with category |
+| `/api/simulate` | Done — realistic Tikkie description format |
+| `/api/summary` | Done |
+| `/api/insights` | Done — Tapix in prod, sandbox overlay in sandbox |
+| `/api/insights/transactions` | Done |
+| `/api/insights/categories` | Done |
+| `/api/events` | Done |
+| `/api/insights/preference` | Done |

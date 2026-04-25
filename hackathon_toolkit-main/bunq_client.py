@@ -151,6 +151,105 @@ class BunqClient:
         raise RuntimeError("No active monetary account found")
 
     # ------------------------------------------------------------------
+    # Insights & event feed helpers
+    # ------------------------------------------------------------------
+
+    def get_insights(
+        self,
+        time_start: str,
+        time_end: str,
+        account_ids: list[int] | None = None,
+    ) -> list:
+        """GET /user/{userID}/insights — category spend totals for a period."""
+        params: dict = {"time_start": time_start, "time_end": time_end}
+        if account_ids:
+            params["monetary_account_id[]"] = account_ids
+        return self.get(f"user/{self.user_id}/insights", params=params)
+
+    def get_insights_search(
+        self,
+        category: str,
+        time_start: str,
+        time_end: str,
+        account_id: int | None = None,
+        count: int = 200,
+    ) -> list:
+        """GET /user/{userID}/insights-search — transactions for a specific category."""
+        params: dict = {
+            "category": category,
+            "time_start": time_start,
+            "time_end": time_end,
+            "count": count,
+        }
+        if account_id is not None:
+            params["monetary_account_id"] = account_id
+        return self.get(f"user/{self.user_id}/insights-search", params=params)
+
+    def get_insight_preference_date(self) -> list:
+        """GET /user/{userID}/insight-preference-date — monthly period start day preference."""
+        return self.get(f"user/{self.user_id}/insight-preference-date")
+
+    def get_events(
+        self,
+        account_id: int | None = None,
+        status: str | None = None,
+        count: int = 200,
+        older_id: int | None = None,
+    ) -> list:
+        """GET /user/{userID}/event — activity feed with Tapix category enrichment."""
+        params: dict = {"count": count}
+        if account_id is not None:
+            params["monetary_account_id"] = account_id
+        if status is not None:
+            params["status"] = status
+        if older_id is not None:
+            params["older_id"] = older_id
+        return self.get(f"user/{self.user_id}/event", params=params)
+
+    def get_transaction_categories(self) -> list:
+        """GET /user/{userID}/additional-transaction-information-category — all categories."""
+        return self.get(f"user/{self.user_id}/additional-transaction-information-category")
+
+    def add_funds(self, account_id: int, amount: str, currency: str = "EUR") -> int:
+        """Request funds from Sugar Daddy (auto-accepted in sandbox) to fund the account."""
+        resp = self.post(
+            f"user/{self.user_id}/monetary-account/{account_id}/request-inquiry",
+            {
+                "amount_inquired": {"value": amount, "currency": currency},
+                "counterparty_alias": {
+                    "type": "EMAIL",
+                    "value": "sugardaddy@bunq.com",
+                    "name": "Sugar Daddy",
+                },
+                "description": "Demo account funding",
+                "allow_bunqme": False,
+            },
+        )
+        return resp[0]["Id"]["id"]
+
+    def make_payment(
+        self,
+        account_id: int,
+        amount: str,
+        description: str,
+        currency: str = "EUR",
+    ) -> int:
+        """Make an outgoing payment to Sugar Daddy (simulates a merchant expense in sandbox)."""
+        resp = self.post(
+            f"user/{self.user_id}/monetary-account/{account_id}/payment",
+            {
+                "amount": {"value": amount, "currency": currency},
+                "counterparty_alias": {
+                    "type": "EMAIL",
+                    "value": "sugardaddy@bunq.com",
+                    "name": "Sugar Daddy",
+                },
+                "description": description,
+            },
+        )
+        return resp[0]["Id"]["id"]
+
+    # ------------------------------------------------------------------
     # Internal: HTTP request building, signing, context persistence
     # ------------------------------------------------------------------
 

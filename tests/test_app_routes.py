@@ -448,19 +448,19 @@ def test_recent_expenses_amount_is_positive(client):
     assert data[0]["amount"] == pytest.approx(57.48)
 
 
-def test_recent_expenses_max_ten_results(client):
-    """At most 10 outgoing payments are returned."""
+def test_recent_expenses_max_twenty_results(client):
+    """At most 20 outgoing payments are returned."""
     mock_bunq_c = _mock_bunq_client()
     mock_bunq_c.get.return_value = [
         {"Payment": {"id": i, "amount": {"value": "-10.00"}, "description": f"Expense {i}",
                      "created": "2026-04-15 12:00:00", "counterparty_alias": {"display_name": "Vendor"}}}
-        for i in range(1, 20)
+        for i in range(1, 30)
     ]
     app_module._state["bunq_client"] = mock_bunq_c
     app_module._state["account_id"] = 99
 
     resp = client.get("/api/recent-expenses")
-    assert len(resp.get_json()) == 10
+    assert len(resp.get_json()) == 20
 
 
 def test_recent_expenses_response_has_required_fields(client):
@@ -607,11 +607,11 @@ def test_simulate_with_expense_id_in_state_uses_split_format(client):
         client.post("/api/simulate", json={"person": "Sarah", "amount": 13.31})
 
     call_body = mock_bunq_c.post.call_args[0][1]
-    assert call_body["description"] == "SPLIT|TXN200|Sarah|13.31"
+    assert call_body["description"] == "Tikkie from Sarah — SPLIT|TXN200|Sarah|13.31"
 
 
 def test_simulate_without_expense_id_uses_plain_format(client):
-    """No expense_transaction_id → description is plain 'Tikkie repayment — name'."""
+    """No expense_transaction_id → description is plain 'Tikkie from {name} — amount'."""
     mock_bunq_c = _mock_bunq_client()
     mock_bunq_c.post.return_value = [{"Id": {"id": 1}}]
     app_module._state["bunq_client"] = mock_bunq_c
@@ -622,7 +622,7 @@ def test_simulate_without_expense_id_uses_plain_format(client):
         client.post("/api/simulate", json={"person": "Tom", "amount": 22.39})
 
     call_body = mock_bunq_c.post.call_args[0][1]
-    assert call_body["description"] == "Tikkie repayment — Tom"
+    assert call_body["description"] == "Tikkie from Tom — 22.39"
 
 
 def test_simulate_linked_expense_id_returned_in_response(client):

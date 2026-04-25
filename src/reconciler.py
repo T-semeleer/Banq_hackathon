@@ -73,13 +73,27 @@ def reconcile(client: BunqClient, account_id: int, split_result: SplitResult) ->
 
     total_repaid = sum(p["amount_owed"] for p in payments if p["paid"])
     original = round(split_result.total, 2)
+    net_cost = round(original - total_repaid, 2)
+    remaining = round(sum(p["amount_owed"] for p in payments if not p["paid"]), 2)
+
+    if remaining == 0:
+        summary_line = (
+            f"All repaid. You paid €{original:.2f} total and received "
+            f"€{total_repaid:.2f} back — your actual share was €{net_cost:.2f}."
+        )
+    else:
+        summary_line = (
+            f"You paid €{original:.2f}. Received €{total_repaid:.2f} so far. "
+            f"Your current net cost is €{net_cost:.2f} (€{remaining:.2f} still outstanding)."
+        )
 
     return {
         "original_total": original,
         "payments": payments,
         "total_repaid": round(total_repaid, 2),
-        "net_cost": round(original - total_repaid, 2),
-        "remaining_owed": round(sum(p["amount_owed"] for p in payments if not p["paid"]), 2),
+        "net_cost": net_cost,
+        "remaining_owed": remaining,
+        "summary_line": summary_line,
     }
 
 
